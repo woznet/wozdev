@@ -1,0 +1,13 @@
+{
+  "name": "wozdev",
+  "version": "0.1.1",
+  "description": "Woz's AI development toolkit - house-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), with agents and hooks to come",
+  "author": {
+    "name": "Woz",
+    "url": "https://github.com/woznet"
+  },
+  "homepage": "https://github.com/woznet/wozdev",
+  "repository": "https://github.com/woznet/wozdev",
+  "license": "MIT",
+  "keywords": ["markdown", "rumdl", "powershell", "psscriptanalyzer", "style-guide", "linting", "toolkit"]
+}

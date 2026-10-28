@@ -1,0 +1,17 @@
+# Example rumdl configuration for the writing-markdown skill.
+# It also keeps this skill's own Markdown files lint-clean.
+# See references/rumdl-reference.md for the full option catalog.
+
+[global]
+flavor = "gfm"
+
+# MD013 (line length) is disabled. It is the most opinionated rule in the set, and hard-wrapping prose,
+# tables, URLs, and code blocks to a column limit does more harm than good. Soft-wrap in the editor instead.
+disable = ["MD013"]
+
+# MD025 still enforces a single level-1 heading, but an empty front-matter-title stops rumdl from counting a
+# YAML `title:` as an H1 (the default is front-matter-title = "title"). Documents may carry both a front matter
+# title and one `# Heading`; a genuine second `#` heading in the body is still an error.
+[MD025]
+level = 1
+front-matter-title = ""

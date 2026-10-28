@@ -1,0 +1,11 @@
+# rumdl lint cache
+.rumdl_cache/
+
+# Local-only rumdl config at the repo root. The skill's own
+# skills/writing-markdown/.rumdl.toml is bundled and stays tracked.
+/.rumdl.toml
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.log
