@@ -18,17 +18,23 @@ On Windows, `powershell` (5.1, Desktop edition) is **not** `pwsh` (7.x, Core). F
 
 ## 2. Resolve the Latest Version
 
-The `/releases/latest` redirect gives the tag without an API token or rate limit.
+Read `StableReleaseTag` from the repo's `tools/metadata.json`. It is a small static file, so the lookup needs no API token, has no rate limit, and is faster than the GitHub releases API.
+
+No `pwsh` yet (the usual Linux/macOS bootstrap case) - use `curl` and `sed`, which needs no `jq`:
 
 ```bash
-VER=$(curl -sSI https://github.com/PowerShell/PowerShell/releases/latest |
-    tr -d '\r' | sed -n 's#.*/releases/tag/v##p')
+VER=$(curl -sS --fail https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json |
+    sed -n 's/.*"StableReleaseTag": *"v\([^"]*\)".*/\1/p')
 ```
 
+Windows always has `powershell` 5.1 even when `pwsh` is missing, so this works there and on any machine with either shell:
+
 ```powershell
-$Rel = Invoke-RestMethod 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest'
-$Ver = $Rel.tag_name.TrimStart('v')
+$Metadata = Invoke-RestMethod 'https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json'
+$Ver = $Metadata.StableReleaseTag -replace '^v'
 ```
+
+For the LTS build, read `LTSReleaseTag` instead (it is an array).
 
 Assets live at `https://github.com/PowerShell/PowerShell/releases/download/v$VER/<asset>`.
 
@@ -66,8 +72,8 @@ Substitute `win-arm64` on ARM devices.
 
 ## 3b. When GitHub Is Blocked
 
-Sandboxes and corporate proxies often block `github.com` (the version lookup returns
-an empty `VER` or a 403). The same build is published on `packages.microsoft.com`,
+Sandboxes and corporate proxies often block `github.com` and
+`raw.githubusercontent.com` (the version lookup returns an empty `VER` or a 403). The same build is published on `packages.microsoft.com`,
 and on Debian/Ubuntu `dpkg -x` unpacks it without root or a system install:
 
 ```bash
@@ -122,4 +128,5 @@ Get-Module -ListAvailable -Name PSScriptAnalyzer, Pester | Select-Object -Proper
 - **Download in the foreground.** The tarball is ~75 MB. Backgrounding it with `&` loses the process wherever the shell tears down between calls, leaving no file and no error — the transfer itself takes only seconds.
 - **`export PATH` dies with the shell.** In a non-interactive or per-call shell, re-export it or invoke the absolute path (`$HOME/.local/pwsh/pwsh`) each time.
 - **Never pipe a remote script straight into a shell.** Download to a file, then run it.
-- **Pin the version when reproducibility matters.** `releases/latest` is a moving target; hardcode `VER` in CI so a new release cannot change the build.
+- **`metadata.json` can run ahead of the release.** It is bumped on `master`, so for a short window `StableReleaseTag` can name a version whose assets are not published yet. If the asset download 404s, resolve the version from the `/releases/latest` redirect instead, which only points at published releases: `curl -sSI https://github.com/PowerShell/PowerShell/releases/latest | tr -d '\r' | sed -n 's#.*/releases/tag/v##p'`.
+- **Pin the version when reproducibility matters.** `StableReleaseTag` is a moving target; hardcode `VER` in CI so a new release cannot change the build.
