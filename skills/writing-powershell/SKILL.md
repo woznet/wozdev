@@ -83,7 +83,7 @@ pwsh -NoProfile -File <skill-dir>/scripts/Test-PowerShellStyle.ps1 -Path ./MyScr
 - Add `-Fix` to rewrite the files' layout in place first (braces, indentation, cmdlet casing) via `Invoke-Formatter`, then fix what remains by hand. It never changes logic, so it is safe to run on your own output; on a user's file, only when you were asked to change it.
 - The settings leave some house rules unchecked, so read for them yourself: `Write-Host`, empty `catch` blocks, unapproved verbs, plural nouns, missing `ShouldProcess` on state-changing functions, and spacing around operators and braces.
 
-No `pwsh` on the machine? Bootstrap it - see `references/installing-powershell.md`. Don't skip validation or hand back unvalidated code; if installation is truly impossible, say so plainly and list what you checked by hand.
+PowerShell present but PSScriptAnalyzer or Pester missing? Run `<skill-dir>/scripts/Install-AnalysisModule.ps1` (works in `pwsh` or Windows `powershell` 5.1; no prompts, no PowerShellGet), then re-run the checker. No `pwsh` on the machine? Bootstrap it - see `references/installing-powershell.md`. Don't skip validation or hand back unvalidated code; if installation is truly impossible, say so plainly and list what you checked by hand.
 
 ## References
 
@@ -97,8 +97,9 @@ Read on demand - do not load all up front.
 | `references/style-guide.md` | Full style rules with rationale |
 | `references/examples.md` | Before/after rewrites of common AI-generated mistakes |
 | `references/testing-and-modules.md` | Pester 5+ tests (Arrange-Act-Assert), `.psd1/.psm1` layout |
-| `references/installing-powershell.md` | `pwsh`, PSScriptAnalyzer, or Pester is missing |
+| `references/installing-powershell.md` | `pwsh` is missing |
 | `scripts/Test-PowerShellStyle.ps1` | The checker (run it; reading it is optional) |
+| `scripts/Install-AnalysisModule.ps1` | PSScriptAnalyzer or Pester is missing (run it) |
 | `scripts/PSScriptAnalyzerSettings.psd1` | Which built-in rules run and how the formatting rules are configured |
 | `scripts/WozDev-Rules.psm1` | The `Measure-*` custom rules, when a finding's message isn't enough to fix it |
 

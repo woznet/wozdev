@@ -80,7 +80,8 @@ param(
 
 begin {
     if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-        $Message = 'PSScriptAnalyzer is not installed. Run: Install-Module PSScriptAnalyzer -Scope CurrentUser'
+        $Installer = Join-Path -Path $PSScriptRoot -ChildPath 'Install-AnalysisModule.ps1'
+        $Message = ('PSScriptAnalyzer is not installed. Install it (and Pester) with: & "{0}"' -f $Installer)
         $Exception = [System.InvalidOperationException]::new($Message)
         $ErrorRecord = [System.Management.Automation.ErrorRecord]::new($Exception, 'PSScriptAnalyzerMissing', 'NotInstalled', $null)
         $PSCmdlet.ThrowTerminatingError($ErrorRecord)
@@ -241,9 +242,7 @@ end {
         Write-Output ('Clean: {0} file(s), 0 findings.' -f $Files.Count)
         exit 0
     }
-    $Table = $Findings | Sort-Object -Property File, Line |
-        Format-Table -Property Severity, RuleName, File, Line, Message -AutoSize -Wrap |
-            Out-String -Width 220
+    $Table = $Findings | Sort-Object -Property File, Line | Format-Table -Property Severity, RuleName, File, Line, Message -AutoSize -Wrap | Out-String -Width 220
     Write-Output $Table.TrimEnd()
     Write-Output ('{0} finding(s) in {1} file(s).' -f $Findings.Count, $Files.Count)
     exit 1

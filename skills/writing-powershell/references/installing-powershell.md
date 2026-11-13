@@ -111,16 +111,15 @@ RPM distros use `powershell-$VER-1.rh.x86_64.rpm`.
 
 ## 5. Install the Analysis Modules
 
-`pwsh` alone cannot validate anything — add the two modules the workflow depends on.
+`pwsh` alone cannot validate anything — add the two modules the workflow depends on with the bundled installer:
 
-```powershell
-Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop
-Install-Module -Name Pester -Scope CurrentUser -Force -SkipPublisherCheck -ErrorAction Stop
-Get-Module -ListAvailable -Name PSScriptAnalyzer, Pester | Select-Object -Property Name, Version
+```bash
+pwsh -NoProfile -File <skill-dir>/scripts/Install-AnalysisModule.ps1
 ```
 
-`-SkipPublisherCheck` is required for Pester on Windows, where it collides with the Microsoft-signed version shipped in the box. Confirm the bootstrap worked by running the real thing: the bundled checker, `scripts/Test-PowerShellStyle.ps1`.
+It downloads each `.nupkg` straight from `www.powershellgallery.com` and extracts it into the user module folder. That skips PowerShellGet, PSResourceGet, the NuGet provider, and the trusted-repository prompt, so it never stalls a non-interactive shell, and it is several seconds faster than `Install-PSResource`. It runs the same under Windows `powershell` 5.1, and it skips a module that is already available (Pester only from 5.0, so the in-box Pester 3.4 does not count). Add `-Force` to update to the latest version.
+
+Confirm the bootstrap worked by running the real thing: the bundled checker, `scripts/Test-PowerShellStyle.ps1`.
 
 ## Gotchas
 
@@ -129,4 +128,5 @@ Get-Module -ListAvailable -Name PSScriptAnalyzer, Pester | Select-Object -Proper
 - **`export PATH` dies with the shell.** In a non-interactive or per-call shell, re-export it or invoke the absolute path (`$HOME/.local/pwsh/pwsh`) each time.
 - **Never pipe a remote script straight into a shell.** Download to a file, then run it.
 - **`metadata.json` can run ahead of the release.** It is bumped on `master`, so for a short window `StableReleaseTag` can name a version whose assets are not published yet. If the asset download 404s, resolve the version from the `/releases/latest` redirect instead, which only points at published releases: `curl -sSI https://github.com/PowerShell/PowerShell/releases/latest | tr -d '\r' | sed -n 's#.*/releases/tag/v##p'`.
+- **Check the Gallery package URL with a GET, not a HEAD.** `curl -I https://www.powershellgallery.com/api/v2/package/PSScriptAnalyzer` returns 404 even though the download itself works.
 - **Pin the version when reproducibility matters.** `StableReleaseTag` is a moving target; hardcode `VER` in CI so a new release cannot change the build.
