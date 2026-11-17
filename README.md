@@ -58,10 +58,6 @@ claude plugin update wozdev@wozdev
 
 If the update reports that wozdev is already at the latest version, the release did not change `version`, and the cached copy stays as it was.
 
-## Conflicts
-
-If standalone copies of `writing-markdown`, `writing-powershell`, `optimize-prompt`, or `orchestrate-subagents` are also installed (for example in `~/.claude/skills`), both versions are offered and they may differ. Remove the standalone copies once the plugin is installed.
-
 ## Contributing
 
 The skills are developed in a separate workspace and synced into this repository, which bumps the patch number of `version` in `.claude-plugin/plugin.json` on each release. Issues and pull requests are welcome; accepted changes are ported back to the source so the next sync keeps them.
