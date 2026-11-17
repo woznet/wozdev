@@ -46,15 +46,24 @@ Rewrite or draft a prompt so the model reading it gets everything it needs and n
 
 ## Measure
 
+Two equivalent scripts give the same counts and findings. Use PowerShell when it is installed:
+
 ```bash
 pwsh -NoProfile -File <skill-dir>/scripts/Measure-Prompt.ps1 -Path ./prompt.md
 ```
 
+Without `pwsh`, use Windows PowerShell 5.1 on Windows (`powershell -NoProfile -ExecutionPolicy Bypass -File ...` with the same arguments), or the shell version anywhere bash, GNU grep, and awk exist (Linux, Git Bash, WSL):
+
+```bash
+bash <skill-dir>/scripts/measure-prompt.sh ./prompt.md
+```
+
+- `<skill-dir>` is this skill's base directory. Quote the path if it contains spaces.
 - Reports characters, words, lines, an estimated token count, and counts of flagged wording.
-- Add `-Baseline ./original.md` to report tokens saved and the percentage.
-- To measure several files in one run, list them without `-Path`: `... Measure-Prompt.ps1 a.md b.md`.
-- Add `-Findings` to list each flagged phrase with its line number instead of the summary: `Filler` (phrases that usually carry no instruction), `Emphasis` (capitalized intensifiers, repeated `!`), and `Duplicate` (a line repeated verbatim).
-- The token count is characters divided by `-CharsPerToken` (default 4). Tokenizers differ by model and content, so use it to compare versions, not to predict a bill. Use the provider's token counter when an exact number matters.
+- Add `-Baseline ./original.md` (shell: `--baseline ./original.md`) to report tokens saved and the percentage.
+- To measure several files in one run, list them: `... Measure-Prompt.ps1 a.md b.md` (omit `-Path`) or `... measure-prompt.sh a.md b.md`.
+- Add `-Findings` (shell: `--findings`) to list each flagged phrase with its line number instead of the summary: `Filler` (phrases that usually carry no instruction), `Emphasis` (capitalized intensifiers, repeated `!`), and `Duplicate` (a line repeated verbatim). The shell version prints them tab-separated.
+- The token count is characters divided by `-CharsPerToken` (shell: `--chars-per-token`, default 4). Tokenizers differ by model and content, so use it to compare versions, not to predict a bill. Use the provider's token counter when an exact number matters.
 - A flagged line is a candidate, not a verdict. "Never" in a real prohibition and "please" in a customer-facing template can both be right.
 
 ## References
@@ -66,7 +75,8 @@ Read on demand - do not load all up front.
 | `references/structure.md` | Section order, when to use prose, lists, tables, or tags, and notes per prompt type (system prompt, agent brief, skill, template) |
 | `references/token-economy.md` | The catalog of cuts ranked by saving, what never to cut, compact data formats, and cache-friendly ordering |
 | `references/examples.md` | Before/after rewrites, including one where the right fix makes the prompt longer |
-| `scripts/Measure-Prompt.ps1` | The measuring script (run it; reading it is optional) |
+| `scripts/Measure-Prompt.ps1` | The measuring script for PowerShell (run it; reading it is optional) |
+| `scripts/measure-prompt.sh` | The same measuring script for bash, when PowerShell is not installed (run it; reading it is optional) |
 
 ## Gotchas
 
