@@ -14,8 +14,9 @@ Each skill loads automatically when Claude works on the kind of file or task it 
 | `writing-powershell` | Any PowerShell work - `.ps1` / `.psm1` / `.psd1` files, one-liners, Pester, Windows and M365 admin              | `scripts/Test-PowerShellStyle.ps1` (PSScriptAnalyzer plus custom `Measure-*` rules) |
 | `optimize-prompt`    | Writing, tightening, or restructuring prompts - system prompts, agent briefs, `SKILL.md`, `CLAUDE.md`, templates | `scripts/Measure-Prompt.ps1` or `scripts/measure-prompt.sh` (estimated tokens before/after, filler and emphasis) |
 | `orchestrate-subagents` | Planning or running a large task as batches of sub-agent work; writes `docs/woz-plans/<name>-plan.md` (and `-execute.md` in plan-only mode) | `scripts/Test-OrchestrationPlan.ps1` or `scripts/test-orchestration-plan.sh` (sections, batch fields, dependency cycles, write-key conflicts) |
+| `write-build-doc` | Turning rough notes, requirements, or implementation options into a build doc for a coding agent; writes `docs/woz-docs/build/<name>-build.md` | `rumdl check --no-cache` (via `writing-markdown`) |
 
-Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, `wozdev:optimize-prompt`, and `wozdev:orchestrate-subagents`.
+Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, `wozdev:optimize-prompt`, `wozdev:orchestrate-subagents`, and `wozdev:write-build-doc`.
 
 ## Installation
 
@@ -42,7 +43,7 @@ claude --plugin-dir wozdev
 
 ## Usage
 
-Once installed, ask Claude to work with Markdown, PowerShell, prompts, or multi-agent plans as usual - for example "write a README for this module", "write a function that exports disabled AD users to CSV", "tighten this system prompt", or "plan this migration as sub-agent batches, but don't run anything yet." The right skill loads on its own, and Claude runs its checker before handing the file back. To call a skill directly, type its name as a slash command, such as `/wozdev:optimize-prompt`.
+Once installed, ask Claude to work with Markdown, PowerShell, prompts, multi-agent plans, or build docs as usual - for example "write a README for this module", "write a function that exports disabled AD users to CSV", "tighten this system prompt", "plan this migration as sub-agent batches, but don't run anything yet", or "turn these notes into a build doc." The right skill loads on its own, and Claude runs its checker before handing the file back. To call a skill directly, type its name as a slash command, such as `/wozdev:optimize-prompt`.
 
 ## Updating
 
