@@ -66,6 +66,8 @@ If standalone copies of `writing-markdown`, `writing-powershell`, `optimize-prom
 
 The skills are developed in a separate workspace and synced into this repository, which bumps the patch number of `version` in `.claude-plugin/plugin.json` on each release. Issues and pull requests are welcome; accepted changes are ported back to the source so the next sync keeps them.
 
+Any change under `skills/` must raise `version` in `.claude-plugin/plugin.json`. A CI check enforces this on pull requests and pushes to `main`. For the same check before each commit, run `git config core.hooksPath .github/hooks` once after cloning. In an emergency, `git commit --no-verify` bypasses the hook, but CI still checks.
+
 ## License
 
 [MIT](LICENSE)

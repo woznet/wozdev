@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Block commits that change skills/ without bumping the plugin version.
+exec bash "$(git rev-parse --show-toplevel)/.github/scripts/check-version-bump.sh" --staged
