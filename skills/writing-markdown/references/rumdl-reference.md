@@ -24,15 +24,15 @@ Install from the release binaries at <https://github.com/rvben/rumdl/releases>. 
 
 ## Commands
 
-Pass `--color never` to every command so output stays free of ANSI escape codes, and finish every lint run with `rumdl clean --color never`.
+Pass `--color never` to every command so output stays free of ANSI escape codes, and `--no-cache` to every `check` and `fmt`. Without `--no-cache`, rumdl writes a `.rumdl_cache` folder into the shell's current directory (not the file's folder or the project root), and `rumdl clean` only clears the current directory.
 
 | Command | Purpose |
 | --------- | --------- |
-| `rumdl check --color never .` | Lint files; exit code 1 if violations remain |
-| `rumdl check --color never --fix .` | Auto-fix what it can, report the rest; exit 0 if all fixed |
-| `rumdl fmt --color never .` | Format in place (always exits 0) - ideal for editors/CI |
-| `rumdl check --color never --diff .` | Preview fixes without writing files |
-| `rumdl clean --color never` | Clear the `.rumdl_cache` folder in the current directory - always run last |
+| `rumdl check --color never --no-cache .` | Lint files; exit code 1 if violations remain |
+| `rumdl check --color never --no-cache --fix .` | Auto-fix what it can, report the rest; exit 0 if all fixed |
+| `rumdl fmt --color never --no-cache .` | Format in place (always exits 0) - ideal for editors/CI |
+| `rumdl check --color never --no-cache --diff .` | Preview fixes without writing files |
+| `rumdl clean --color never` | Fallback: clear a `.rumdl_cache` left in the current directory by a run without `--no-cache` |
 | `rumdl init --color never` | Create a default `.rumdl.toml` |
 | `rumdl rule --color never MD013` | Show documentation for a rule (omit ID to list all) |
 | `rumdl config --color never` | Print the effective configuration and its source |
@@ -42,20 +42,20 @@ Pass `--color never` to every command so output stays free of ANSI escape codes,
 
 ```bash
 # Lint a single file
-rumdl check --color never README.md
+rumdl check --color never --no-cache README.md
 
 # Auto-fix a file, then verify nothing is left
-rumdl check --color never --fix README.md
-rumdl check --color never README.md
+rumdl check --color never --no-cache --fix README.md
+rumdl check --color never --no-cache README.md
 
 # Lint a whole tree, but skip generated folders
-rumdl check --color never . --exclude "node_modules,dist"
+rumdl check --color never --no-cache . --exclude "node_modules,dist"
 
 # Lint only specific rules, or disable noisy ones
-rumdl check --color never --enable MD001,MD040 docs/
-rumdl check --color never --disable MD013 README.md
+rumdl check --color never --no-cache --enable MD001,MD040 docs/
+rumdl check --color never --no-cache --disable MD013 README.md
 
-# Always finish by clearing the cache, from the same directory
+# Fallback only: remove a cache an earlier run without --no-cache left in this directory
 rumdl clean --color never
 ```
 
@@ -68,6 +68,7 @@ rumdl searches upward from the current directory for `.rumdl.toml`, `rumdl.toml`
 flavor = "standard"
 exclude = ["node_modules", "dist"]
 disable = ["MD033"]   # allow inline HTML, for example
+cache = false         # same as --no-cache, but only where this config is found
 
 [MD013]
 line-length = 120

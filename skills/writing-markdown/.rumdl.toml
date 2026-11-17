@@ -9,6 +9,10 @@ flavor = "gfm"
 # tables, URLs, and code blocks to a column limit does more harm than good. Soft-wrap in the editor instead.
 disable = ["MD013"]
 
+# No .rumdl_cache folder. rumdl writes it to the shell's current directory, so it is easy to leave behind;
+# still pass --no-cache on the command line, because this file only applies where rumdl finds it.
+cache = false
+
 # MD025 still enforces a single level-1 heading, but an empty front-matter-title stops rumdl from counting a
 # YAML `title:` as an H1 (the default is front-matter-title = "title"). Documents may carry both a front matter
 # title and one `# Heading`; a genuine second `#` heading in the body is still an error.

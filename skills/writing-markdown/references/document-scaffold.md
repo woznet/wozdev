@@ -23,7 +23,7 @@ Describe the steps in order:
 A fenced code block with a language tag for any commands:
 
 ```bash
-rumdl check --color never .
+rumdl check --color never --no-cache .
 ```
 
 ## Configuration
