@@ -13,8 +13,9 @@ Each skill loads automatically when Claude works on the kind of file or task it 
 | `writing-markdown`   | Writing or fixing READMEs, docs, changelogs, or any `.md` / `.markdown` file                                    | `rumdl check --no-cache --fix`                                                      |
 | `writing-powershell` | Any PowerShell work - `.ps1` / `.psm1` / `.psd1` files, one-liners, Pester, Windows and M365 admin              | `scripts/Test-PowerShellStyle.ps1` (PSScriptAnalyzer plus custom `Measure-*` rules) |
 | `optimize-prompt`    | Writing, tightening, or restructuring prompts - system prompts, agent briefs, `SKILL.md`, `CLAUDE.md`, templates | `scripts/Measure-Prompt.ps1` or `scripts/measure-prompt.sh` (estimated tokens before/after, filler and emphasis) |
+| `orchestrate-subagents` | Planning or running a large task as batches of sub-agent work; writes `docs/woz-plans/<name>-plan.md` (and `-execute.md` in plan-only mode) | `scripts/Test-OrchestrationPlan.ps1` or `scripts/test-orchestration-plan.sh` (sections, batch fields, dependency cycles, write-key conflicts) |
 
-Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, and `wozdev:optimize-prompt`.
+Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, `wozdev:optimize-prompt`, and `wozdev:orchestrate-subagents`.
 
 ## Installation
 
@@ -37,10 +38,11 @@ claude --plugin-dir wozdev
 - **rumdl** for the Markdown skill. If it is missing, the skill installs the GitHub release binary on 64-bit Windows or Linux with its bundled `Install-Rumdl.ps1` or `install-rumdl.sh`.
 - **PowerShell 7 (`pwsh`)** and the **PSScriptAnalyzer** module for the PowerShell checker. The skill's `references/installing-powershell.md` covers bootstrapping both, plus Pester.
 - **PowerShell 7 (`pwsh`), Windows PowerShell 5.1, or bash with GNU grep and awk** for the prompt meter. It needs no modules; the bash version covers hosts without PowerShell.
+- **PowerShell 7 (`pwsh`), Windows PowerShell 5.1, or bash with awk** for the plan checker. It needs no modules.
 
 ## Usage
 
-Once installed, ask Claude to work with Markdown, PowerShell, or prompts as usual - for example "write a README for this module", "write a function that exports disabled AD users to CSV", or "tighten this system prompt." The right skill loads on its own, and Claude runs its checker before handing the file back. To call a skill directly, type its name as a slash command, such as `/wozdev:optimize-prompt`.
+Once installed, ask Claude to work with Markdown, PowerShell, prompts, or multi-agent plans as usual - for example "write a README for this module", "write a function that exports disabled AD users to CSV", "tighten this system prompt", or "plan this migration as sub-agent batches, but don't run anything yet." The right skill loads on its own, and Claude runs its checker before handing the file back. To call a skill directly, type its name as a slash command, such as `/wozdev:optimize-prompt`.
 
 ## Updating
 
@@ -58,7 +60,7 @@ If the update reports that wozdev is already at the latest version, the release 
 
 ## Conflicts
 
-If standalone copies of `writing-markdown`, `writing-powershell`, or `optimize-prompt` are also installed (for example in `~/.claude/skills`), both versions are offered and they may differ. Remove the standalone copies once the plugin is installed.
+If standalone copies of `writing-markdown`, `writing-powershell`, `optimize-prompt`, or `orchestrate-subagents` are also installed (for example in `~/.claude/skills`), both versions are offered and they may differ. Remove the standalone copies once the plugin is installed.
 
 ## Contributing
 

@@ -11,7 +11,7 @@
     {
       "name": "wozdev",
       "source": "./",
-      "description": "House-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), and a prompt optimizer that measures before/after token cost",
+      "description": "House-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), a prompt optimizer that measures before/after token cost, and a sub-agent orchestrator that writes checked, batched execution plans",
       "category": "development"
     }
   ]
