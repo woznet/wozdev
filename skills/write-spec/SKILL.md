@@ -1,6 +1,6 @@
 ---
 name: write-spec
-description: 'Turns rough notes, brain dumps, or partial ideas for a feature or skill into a paired PRD.md (what and why) and SPEC.md (how) saved to docs/woz-docs/spec-dev/<slug>/. Use when asked to write, draft, or generate a PRD, product spec, technical spec, requirements doc, or design spec, or to scope a new feature or Claude skill before building it. Asks up to four blocking questions only when the core objective, inputs, outputs, or constraints are missing or contradictory; otherwise records assumptions and proceeds. Produces numbered requirements, Out of Scope, and Acceptance Criteria traced to each requirement. Not for implementation checklists (use write-build-doc, which can take the SPEC as input), multi-agent execution plans (use orchestrate-subagents), or writing a prompt (use optimize-prompt).'
+description: 'Turns rough notes, brain dumps, or partial ideas for a feature or skill into a paired PRD.md (what and why) and SPEC.md (how) saved under docs/woz-docs/spec-dev/. Use when asked to write, draft, or generate a PRD, product spec, technical spec, requirements doc, or design spec, or to scope a new feature or Claude skill before building it. Not for implementation checklists (use write-build-doc, which can take the SPEC as input), multi-agent execution plans (use orchestrate-subagents), or writing a prompt (use optimize-prompt).'
 ---
 
 # Write Spec
@@ -35,10 +35,10 @@ When the notes concern this repository, do a quick read-only lookup first; a pil
 
 1. **Capture.** Read all the notes. Keep constraints and do-not instructions verbatim; they become requirements, Out of Scope items, or Constraints.
 2. **Gate.** Apply the Clarification Gate.
-3. **Write the PRD.** Objective, audience, use cases, numbered `FR`/`NFR` requirements, Out of Scope, risks, assumptions.
-4. **Write the SPEC.** Constraints, inputs, outputs, workflow, interfaces, edge cases, and Acceptance Criteria. Cite the requirement IDs each workflow step and criterion serves.
-5. **Ground it.** When the notes concern this repository, confirm named paths, scripts, and commands exist with read-only lookups, and look for anything that already does the job; name it in Key Risks. Anything unconfirmed goes to Open Questions with the assumption used meanwhile; never invent it.
-6. **Write both files**, then lint them with rumdl as the `writing-markdown` skill describes (`rumdl check --no-cache --fix`) until zero violations remain.
+3. **Ground it.** When the notes concern this repository, confirm named paths, scripts, and commands exist with read-only lookups, and look for anything that already does the job; name it in Key Risks. Anything unconfirmed goes to Open Questions with the assumption used meanwhile; never invent it.
+4. **Draft the PRD.** Objective, audience, use cases, numbered `FR`/`NFR` requirements, Out of Scope, risks, assumptions.
+5. **Draft the SPEC.** Constraints, inputs, outputs, workflow, interfaces, edge cases, and Acceptance Criteria. Cite the requirement IDs each workflow step and criterion serves.
+6. **Write both files**, then lint them with rumdl as the `writing-markdown` skill describes (`rumdl check --color never --no-cache --fix`, plus `--disable MD013` when the repository has no `.rumdl.toml`) until zero violations remain. If rumdl is missing and cannot be installed, say so in the report.
 7. **Report** both paths and any Open Questions. If the user wants an implementation checklist next, `write-build-doc` takes the SPEC as its notes.
 
 ## Rules That Are Easy to Get Wrong

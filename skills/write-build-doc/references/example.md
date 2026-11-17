@@ -57,10 +57,13 @@ Fail any commit, pull request, or push to `main` that changes `skills/` without 
 - **Intent**: Fail fast locally before a commit is made.
 - **Implementation Guidelines**:
   - Run `.github/scripts/check-version-bump.sh --staged` and exit with its status.
+  - Add the one-time setup command `git config core.hooksPath .github/hooks` to `README.md`.
 - **Done When**:
   - With `core.hooksPath` set, `git commit` of an unbumped `skills/` change is refused.
+  - `README.md` contains the `git config core.hooksPath .github/hooks` command.
 
 ## Open Questions
 
+- Build both the CI workflow and the pre-commit hook? The notes say "probably both?" - assuming: both.
 - Should the push check compare against the previous commit or the last release tag? - assuming: the previous commit (`before` SHA).
 ````

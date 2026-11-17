@@ -42,7 +42,7 @@ List branches that are merged into `main` and inactive for a set number of days,
 ## Non-Functional Requirements
 
 - **NFR1 Read-only**: Change no branch, ref, or remote; "dont delete anything".
-- **NFR2 Runtime**: Run on PowerShell 7 with only `git` on PATH.
+- **NFR2 Runtime**: Run on PowerShell 7 from a git repository root with only `git` on PATH.
 
 ## Out of Scope
 

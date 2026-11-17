@@ -10,7 +10,7 @@ When running a plan in `plan_and_execute` mode without an execute file, follow t
 # Execute: [Task Name]
 
 - **Plan Source**: `docs/woz-plans/<name>-plan.md`
-- **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required.
+- **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required. The plan's own `Mode` line records how the plan was written and does not block this run.
 
 ## Execution Loop
 

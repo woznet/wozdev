@@ -1,6 +1,6 @@
 ---
 name: orchestrate-subagents
-description: 'Plans and runs complex, multi-part tasks as batches of sub-agent work at the lowest token cost that keeps the result correct. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Decides whether delegation pays at all, groups steps that share context and tools into batches, orders them as a dependency graph, gives every file or resource exactly one writer, and ends with an independent review. Writes docs/woz-plans/<name>-plan.md, plus a trim <name>-execute.md in plan-only mode, and validates the plan with a bundled checker. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
+description: 'Plans, and when authorized runs, a large multi-part task as batches of sub-agent work, saved as a plan file under docs/woz-plans/. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
 ---
 
 # Orchestrate Sub-Agents
@@ -20,7 +20,7 @@ Turn a large task into the fewest, cheapest batches of sub-agent work that still
 
 A `plan_only` plan still describes every batch, including ones that create files or change settings; it only runs none of them. Write the plan files with the file-write tool, not a shell heredoc.
 
-Use `plan_only` unless the user clearly authorized execution ("plan and run it", "go ahead and do it"). When authority is ambiguous, choose `plan_only` and say so. Invoking this skill in `plan_and_execute`, or running an execute file, is the user's request to spawn sub-agents; `plan_only` spawns none except read-only exploration.
+Use `plan_only` unless the user clearly authorized execution ("plan and run it", "go ahead and do it"). When authority is ambiguous, choose `plan_only` and say so. A `plan_and_execute` request, or a request to run an execute file, is the user asking for sub-agents to be spawned. `plan_only` spawns none, apart from read-only exploration.
 
 **Name:** kebab-case, 2-4 words, task noun first (`version-bump-ci`). Never overwrite an existing plan; add `-2`, `-3`.
 
@@ -28,14 +28,14 @@ Use `plan_only` unless the user clearly authorized execution ("plan and run it",
 
 ## Workflow
 
-1. **Capture the request.** Record the goal and concrete deliverables. Copy every restriction, approval boundary, and do-not-send instruction verbatim; these go in the plan unchanged.
+1. **Capture the request.** Record the goal and concrete deliverables. Copy every restriction, approval boundary, and do-not-send instruction verbatim; these go in the plan unchanged. An instruction that only chooses the mode ("don't run anything yet", "plan only") sets the Mode and is not copied as a restriction, because the session that later runs the execute file must obey every restriction.
 2. **Clarify only what blocks.** Ask one focused question when missing information prevents a safe decomposition (who may be contacted, which branch, what "done" means). Otherwise record a reversible assumption in the plan. Gaps or contradictions in the source material that do not block planning go under Open Questions, each with the assumption the plan uses meanwhile.
 3. **Decompose.** List the distinct steps, the deliverable each serves, and what each depends on. Mark unresolved prerequisites. Reject cycles by splitting or reordering steps.
 4. **Apply the cost gate.** Decide per step whether it runs inline (by the orchestrator) or in a sub-agent, using `references/batching-rules.md`. A plan with one batch, or with every step inline, is valid.
 5. **Cluster into batches.** Merge steps whose context and tools largely overlap, but only when every hard gate in `references/batching-rules.md` passes. Assign each batch its write keys.
 6. **Write the plan** from `references/plan-template.md`: Context Manifest, batches with dependencies, write keys, acceptance criteria, and the Final Review. Imperative verbs, no filler. In `plan_only`, also write the execute file from `references/execute-template.md`. It holds no rules of its own, only the runtime loop, so the two files cannot drift.
 7. **Check the plan** with the bundled checker (see Check) and fix every finding.
-8. **Execute** (`plan_and_execute` only). Follow the loop in `references/execute-template.md`: run ready batches in dependency order, hold each batch's write keys, verify acceptance before releasing dependents, retry a failed batch at most twice with a targeted fix, then escalate. Never replay a confirmed side effect.
+8. **Execute** (`plan_and_execute` only). Follow the loop in `references/execute-template.md`; it sets dispatch order, write-key holding, acceptance checks, and the retry limit.
 9. **Review.** Give the Final Review to a fresh agent that wrote none of the batches. Pass it the acceptance checklist and the artifacts, not the writers' reasoning. Route each blocking finding back to the owning batch, then re-verify it and its dependents.
 10. **Report** the plan path (and execute path), each batch's status, the review verdict, and any approval still pending.
 
@@ -69,10 +69,7 @@ bash <skill-dir>/scripts/test-orchestration-plan.sh docs/woz-plans/<name>-plan.m
 
 ## Rules That Are Easy to Get Wrong
 
-- **One writer per key.** Two batches that write the same file or resource must be connected by a dependency, so they run one after the other. Parallel batches that must edit overlapping trees each run in their own git worktree and merge afterward.
-- **Do not merge across authority.** A batch that only reads must not absorb a step that sends, publishes, deletes, or spends, even when the context matches; keep the side effect in its own batch behind its approval.
-- **Do not merge across privacy.** Material one batch may see but another may not stays in separate batches.
-- **Context has a ceiling.** If a merged batch's context would crowd out room to work, split it, even though splitting costs a second spawn.
+- **The hard gates outrank token savings.** `references/batching-rules.md` lists them: no merge across an approval or privacy boundary, one writer per key, and a batch's context must leave room to work. A merge that fails any gate is split, even though splitting costs a second spawn.
 - **Review is not optional.** Every plan ends with the Final Review, including single-batch plans.
 
 ## References

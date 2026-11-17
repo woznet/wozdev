@@ -1,6 +1,6 @@
 ---
 name: write-build-doc
-description: 'Turns rough notes - a goal, a loose checklist, and implementation options or components - into a concise, agent-actionable Markdown build document and saves it to docs/woz-docs/build/<name>-build.md. Use when asked to write, generate, or draft a build doc, build plan, or build spec, or to turn notes, requirements, or architectural options into something a coding agent can implement. Produces an Overall Goal, a unified Build Checklist, and per-option Intent, Implementation Guidelines, and Done When criteria, with gaps listed as Open Questions instead of invented. Not for multi-agent execution plans (use orchestrate-subagents), for writing a prompt (use optimize-prompt), or for general documentation.'
+description: 'Turns rough notes - a goal, a loose checklist, and implementation options or components - into a concise Markdown build document a coding agent can follow, saved under docs/woz-docs/build/. Use when asked to write, generate, or draft a build doc, build plan, or build spec, or to turn notes, requirements, a SPEC.md, or architectural options into something a coding agent can implement. Not for PRDs or specs (use write-spec), for multi-agent execution plans (use orchestrate-subagents), for writing a prompt (use optimize-prompt), or for general documentation.'
 ---
 
 # Write Build Doc
@@ -11,7 +11,7 @@ Turn unstructured notes into a build document that states what to build and how,
 
 ## Input
 
-Notes in the chat, a file path the user names, or both. They may hold a goal, task lists, alternative approaches, components, constraints, and rationale in any order.
+Notes in the chat, a file path the user names, or both. They may hold a goal, task lists, alternative approaches, components, constraints, and rationale in any order. A `SPEC.md` from `write-spec` is valid input: cite its requirement IDs, such as `(FR2)`, on the Done When lines that prove them.
 
 ## Output
 
@@ -25,12 +25,12 @@ Notes in the chat, a file path the user names, or both. They may hold a goal, ta
 ## Workflow
 
 1. **Capture.** Read all the notes. Copy constraints and do-not instructions verbatim; they belong in the guidelines they limit.
-2. **Extract the goal.** One or two sentences on the final outcome, under `## Overall Goal`.
+2. **Extract the goal.** One or two sentences on the final outcome, under `## Overall Goal`. If the notes do not say what the thing is for or what it acts on, write nothing and ask one question; a doc whose Open Questions block the build is not a build doc.
 3. **Sort options from components.** Components all get built. Options are alternatives: if the notes pick one, build the doc around it and drop or briefly note the rest; if they do not, keep each option as its own section and add "Choose between X and Y" to Open Questions.
-4. **Break down each option or component** into Intent (what it achieves and why, including any hard gate), Implementation Guidelines (imperative steps with concrete paths, commands, conditions, exit codes), and Done When (checkable criteria).
-5. **Ground it.** When the notes concern this repository, confirm named paths, scripts, and commands exist with read-only lookups. Anything you cannot confirm or the notes leave open goes to Open Questions with the assumption the doc uses meanwhile; never invent it.
+4. **Ground it.** When the notes concern this repository, confirm named paths, scripts, and commands exist with read-only lookups. Anything you cannot confirm or the notes leave open goes to Open Questions with the assumption the doc uses meanwhile; never invent it.
+5. **Break down each option or component** into Intent (what it achieves and why, including any hard gate), Implementation Guidelines (imperative steps with concrete paths, commands, conditions, exit codes), and Done When (checkable criteria).
 6. **Consolidate the checklist.** Merge explicit and implied tasks into one ordered `- [ ]` list under `## Build Checklist`, covering every component and the chosen option, with no duplicates.
-7. **Write the file**, then lint it with rumdl as the `writing-markdown` skill describes (`rumdl check --no-cache --fix`) until zero violations remain.
+7. **Write the file**, then lint it with rumdl as the `writing-markdown` skill describes (`rumdl check --color never --no-cache --fix`, plus `--disable MD013` when the repository has no `.rumdl.toml`) until zero violations remain. If rumdl is missing and cannot be installed, say so in the report.
 8. **Report** the path and any Open Questions.
 
 ## Rules That Are Easy to Get Wrong

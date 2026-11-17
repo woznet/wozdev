@@ -9,7 +9,7 @@ Copy the template below into `docs/woz-plans/<name>-plan.md` and replace every b
 - Every batch has five fields as top-level list items: `**Write Keys**`, `**Target Context**`, `**Dependencies**`, `**Acceptance Criteria**`, `**Instructions**`. Each needs a value on the same line or an indented list under it.
 - `**Write Keys**` holds backticked keys or `none`. `**Dependencies**` holds `none` or `Batch <number>` references.
 - `**Mode**` holds `` `plan_only` `` or `` `plan_and_execute` ``.
-- Optional per-batch fields: `**Agent**` (agent type, model tier, worktree), `**Approval**` (the user's yes this batch waits for), and `**Returns**` (what the report contains).
+- Optional per-batch fields: `**Agent**` (agent type, model tier, worktree; `inline` alone when the orchestrator runs the batch itself), `**Approval**` (the user's yes this batch waits for), and `**Returns**` (what the report contains).
 - Model tier is `small` (mechanical work), `standard`, or `strongest` (design, review); the host maps it to a model.
 
 ## Template

@@ -8,7 +8,7 @@ A complete `plan_only` pair for a small real task. It is illustrative: copy the 
 
 Why it is shaped this way:
 
-- "Don't run anything yet" makes the mode `plan_only`.
+- "Don't run anything yet" makes the mode `plan_only`. It is recorded as the Mode and not as a Verbatim Restriction, or it would forbid the later run of the execute file.
 - The shared check script and the CI workflow need the same context (git diff, version comparison), so they share Batch 1.
 - The hook and its README note call the script, so Batch 2 depends on Batch 1. The dependency also serializes them if a later edit touches both.
 - Branch protection is a settings change behind an approval. It gets its own inline batch, never merged into a writing batch.
@@ -27,7 +27,6 @@ Fail CI and local commits when `skills/` changes without a strictly higher `vers
 
 - **Mode**: `plan_only`
 - **Verbatim Restrictions**:
-  - "Don't run anything yet."
   - "Don't touch branch protection without asking me."
 - **Approvals Required**: making the CI check required in branch protection for `main`
 - **Assumptions**:
@@ -75,9 +74,9 @@ Version 1.
 
 ### Batch 3: Branch Protection
 
-- **Agent**: inline, standard
+- **Agent**: inline
 - **Approval**: making the version check required on `main`
-- **Write Keys**: `resource:branch-protection-main`
+- **Write Keys**: `resource:github-branch-protection-main`
 - **Target Context**: workflow job name from Batch 1
 - **Dependencies**: Batch 1
 - **Acceptance Criteria**:
@@ -104,7 +103,7 @@ Version 1.
 # Execute: Version Bump Enforcement
 
 - **Plan Source**: `docs/woz-plans/version-bump-ci-plan.md`
-- **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required.
+- **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required. The plan's own `Mode` line records how the plan was written and does not block this run.
 
 ## Execution Loop
 

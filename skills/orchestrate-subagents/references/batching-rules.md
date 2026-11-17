@@ -54,4 +54,3 @@ List every shared source once in the plan's Context Manifest with an ID (`C1`, `
 - Read-only searching goes to an exploration agent; writing goes to a general-purpose agent.
 - Use the `small` tier for mechanical batches (search, rename, format) and keep the strongest model for design and review.
 - Run independent batches at the same time within the host's limits; when the host gives no limit, keep it under five agents at once.
-- Retry a failed batch at most twice, each time with a targeted fix to the brief, then stop and escalate to the user.
