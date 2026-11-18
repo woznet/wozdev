@@ -14,7 +14,7 @@ Each skill loads automatically when Claude works on the kind of file or task it 
 | `writing-powershell` | Any PowerShell work - `.ps1` / `.psm1` / `.psd1` files, one-liners, Pester, Windows and M365 admin              | `scripts/Test-PowerShellStyle.ps1` (PSScriptAnalyzer plus custom `Measure-*` rules) |
 | `optimize-prompt`    | Writing, tightening, or restructuring prompts - system prompts, agent briefs, `SKILL.md`, `CLAUDE.md`, templates | `scripts/Measure-Prompt.ps1` or `scripts/measure-prompt.sh` (estimated tokens before/after, filler and emphasis) |
 | `orchestrate-subagents` | Planning or running a large task as batches of sub-agent work; writes `docs/woz-plans/<name>-plan.md` (and `-execute.md` in plan-only mode) | `scripts/Test-OrchestrationPlan.ps1` or `scripts/test-orchestration-plan.sh` (sections, batch fields, dependency cycles, write-key conflicts) |
-| `write-build-doc` | Turning rough notes, requirements, or implementation options into a build doc for a coding agent; writes `docs/woz-docs/build/<name>-build.md` | `rumdl check --no-cache` (via `writing-markdown`) |
+| `write-build-doc` | Turning rough notes, requirements, or implementation options into a build doc for a coding agent; writes `docs/woz-docs/spec-dev/<slug>/BUILD.md` | `rumdl check --no-cache` (via `writing-markdown`) |
 | `write-spec` | Turning rough notes or a feature or skill idea into a PRD and technical spec, asking only blocking questions; writes `docs/woz-docs/spec-dev/<slug>/PRD.md` and `SPEC.md` | `rumdl check --no-cache` (via `writing-markdown`) |
 
 Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, `wozdev:optimize-prompt`, `wozdev:orchestrate-subagents`, `wozdev:write-build-doc`, and `wozdev:write-spec`.

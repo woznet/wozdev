@@ -1,6 +1,6 @@
 # Build Doc Template
 
-Copy the template below into `docs/woz-docs/build/<name>-build.md` and replace every bracketed placeholder.
+Copy the template below into `docs/woz-docs/spec-dev/<slug>/BUILD.md` and replace every bracketed placeholder.
 
 ## Format Rules
 

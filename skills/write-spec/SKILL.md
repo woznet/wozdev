@@ -39,7 +39,7 @@ When the notes concern this repository, do a quick read-only lookup first; a pil
 4. **Draft the PRD.** Objective, audience, use cases, numbered `FR`/`NFR` requirements, Out of Scope, risks, assumptions.
 5. **Draft the SPEC.** Constraints, inputs, outputs, workflow, interfaces, edge cases, and Acceptance Criteria. Cite the requirement IDs each workflow step and criterion serves.
 6. **Write both files**, then lint them with rumdl as the `writing-markdown` skill describes (`rumdl check --color never --no-cache --fix`, plus `--disable MD013` when the repository has no `.rumdl.toml`) until zero violations remain. If rumdl is missing and cannot be installed, say so in the report.
-7. **Report** both paths and any Open Questions. If the user wants an implementation checklist next, `write-build-doc` takes the SPEC as its notes.
+7. **Report** both paths and any Open Questions. If the user wants an implementation checklist next, `write-build-doc` takes the SPEC as its notes and writes `BUILD.md` into the same `<slug>` folder.
 
 ## Rules That Are Easy to Get Wrong
 

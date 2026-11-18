@@ -14,7 +14,7 @@ dont auto-bump, just fail with a clear msg
 
 ## Output
 
-Saved as `docs/woz-docs/build/version-bump-ci-build.md`:
+Saved as `docs/woz-docs/spec-dev/version-bump-ci/BUILD.md`:
 
 ````markdown
 # Version Bump Check
