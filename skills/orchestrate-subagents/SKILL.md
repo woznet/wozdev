@@ -1,6 +1,6 @@
 ---
 name: orchestrate-subagents
-description: 'Plans, and when authorized runs, a large multi-part task as batches of sub-agent work, saved as a plan file under docs/woz-plans/. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
+description: 'Plans, and when authorized runs, a large multi-part task as batches of sub-agent work, saved as docs/woz-docs/spec-dev/<slug>/PLAN.md. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
 ---
 
 # Orchestrate Sub-Agents
@@ -15,16 +15,21 @@ Turn a large task into the fewest, cheapest batches of sub-agent work that still
 
 | Mode | Writes | Side effects |
 | --- | --- | --- |
-| `plan_only` | `docs/woz-plans/<name>-plan.md` and `docs/woz-plans/<name>-execute.md` | None. At most read-only exploration to build the plan |
-| `plan_and_execute` | `docs/woz-plans/<name>-plan.md` | Dispatches the batches the user authorized |
+| `plan_only` | `PLAN.md` and `EXECUTE.md` | None. At most read-only exploration to build the plan |
+| `plan_and_execute` | `PLAN.md` | Dispatches the batches the user authorized |
 
-A `plan_only` plan still describes every batch, including ones that create files or change settings; it only runs none of them. Write the plan files with the file-write tool, not a shell heredoc.
+A `plan_only` plan still describes every batch, including ones that create files or change settings; it only runs none of them.
 
 Use `plan_only` unless the user clearly authorized execution ("plan and run it", "go ahead and do it"). When authority is ambiguous, choose `plan_only` and say so. A `plan_and_execute` request, or a request to run an execute file, is the user asking for sub-agents to be spawned. `plan_only` spawns none, apart from read-only exploration.
 
-**Name:** kebab-case, 2-4 words, task noun first (`version-bump-ci`). Never overwrite an existing plan; add `-2`, `-3`.
+## Output
 
-**Host plan mode:** if the host restricts writes to its own plan file, put the plan content there, and write the `docs/woz-plans/` files once the host plan is approved.
+- **Paths:** `docs/woz-docs/spec-dev/<slug>/PLAN.md` and, in `plan_only`, `docs/woz-docs/spec-dev/<slug>/EXECUTE.md`, relative to the repository root. Create the folders if needed. Write with the file-write tool, not a shell heredoc.
+- **Slug:** kebab-case, 2-4 words, task noun first (`version-bump-ci`). When the input is a `SPEC.md` or `BUILD.md` under `docs/woz-docs/spec-dev/<slug>/`, reuse that slug and write beside it. Otherwise, if `<slug>/PLAN.md` exists, use `<slug>-2`, `-3`. Update an existing `PLAN.md` in place only when the user asks for that plan to change; read it and its `EXECUTE.md` first.
+- **Format:** exactly the structures in `references/plan-template.md` and `references/execute-template.md`.
+- **Chat reply:** what Workflow step 10 lists. No summary of the plan.
+
+**Host plan mode:** if the host restricts writes to its own plan file, draft the plan there, and write `docs/woz-docs/spec-dev/<slug>/` once the host plan is approved.
 
 ## Workflow
 
@@ -33,11 +38,11 @@ Use `plan_only` unless the user clearly authorized execution ("plan and run it",
 3. **Decompose.** List the distinct steps, the deliverable each serves, and what each depends on. Mark unresolved prerequisites. Reject cycles by splitting or reordering steps.
 4. **Apply the cost gate.** Decide per step whether it runs inline (by the orchestrator) or in a sub-agent, using `references/batching-rules.md`. A plan with one batch, or with every step inline, is valid.
 5. **Cluster into batches.** Merge steps whose context and tools largely overlap, but only when every hard gate in `references/batching-rules.md` passes. Assign each batch its write keys.
-6. **Write the plan** from `references/plan-template.md`: Context Manifest, batches with dependencies, write keys, acceptance criteria, and the Final Review. Imperative verbs, no filler. In `plan_only`, also write the execute file from `references/execute-template.md`. It holds no rules of its own, only the runtime loop, so the two files cannot drift.
-7. **Check the plan** with the bundled checker (see Check) and fix every finding.
+6. **Write the plan** from `references/plan-template.md`: Context Manifest, batches with dependencies, write keys, acceptance criteria, and the Final Review. Imperative verbs, no filler. In `plan_only`, also write `EXECUTE.md` from `references/execute-template.md`. It holds no rules of its own, only the runtime loop, so the two files cannot drift.
+7. **Check the plan** with the bundled checker (see Check) and fix every finding, then lint both files with rumdl as the `writing-markdown` skill describes (`rumdl check --color never --no-cache --fix`, plus `--disable MD013` when the repository has no `.rumdl.toml`) until zero violations remain. If rumdl is missing and cannot be installed, say so in the report.
 8. **Execute** (`plan_and_execute` only). Follow the loop in `references/execute-template.md`; it sets dispatch order, write-key holding, acceptance checks, and the retry limit.
 9. **Review.** Give the Final Review to a fresh agent that wrote none of the batches. Pass it the acceptance checklist and the artifacts, not the writers' reasoning. Route each blocking finding back to the owning batch, then re-verify it and its dependents.
-10. **Report** the plan path (and execute path), each batch's status, the review verdict, and any approval still pending.
+10. **Report** the plan path (and execute path), each batch's status, the review verdict, any approval still pending, and any Open Questions.
 
 ## Writing Batch Briefs
 
@@ -54,17 +59,17 @@ A batch's instructions are the whole world of the agent that runs it. For each o
 Two equivalent scripts give the same findings. Use PowerShell when it is installed:
 
 ```bash
-pwsh -NoProfile -File <skill-dir>/scripts/Test-OrchestrationPlan.ps1 docs/woz-plans/<name>-plan.md
+pwsh -NoProfile -File <skill-dir>/scripts/Test-OrchestrationPlan.ps1 docs/woz-docs/spec-dev/<slug>/PLAN.md
 ```
 
 Otherwise use bash (Linux, Git Bash, WSL):
 
 ```bash
-bash <skill-dir>/scripts/test-orchestration-plan.sh docs/woz-plans/<name>-plan.md
+bash <skill-dir>/scripts/test-orchestration-plan.sh docs/woz-docs/spec-dev/<slug>/PLAN.md
 ```
 
 - `<skill-dir>` is this skill's base directory. Quote paths that contain spaces.
-- It checks the required sections and the mode, the fields in every batch, unknown or self dependencies, dependency cycles, write keys held by two batches with no dependency path between them, and, in `plan_only`, that the execute file exists and names the plan.
+- It checks the required sections and the mode, the fields in every batch, unknown or self dependencies, dependency cycles, write keys held by two batches with no dependency path between them, and, in `plan_only`, that `EXECUTE.md` sits beside `PLAN.md` and names it.
 - It prints `path:line: error: message` per finding and exits 1, or prints `OK` and exits 0. Exit 2 means bad arguments or a missing file.
 
 ## Rules That Are Easy to Get Wrong
@@ -77,6 +82,6 @@ bash <skill-dir>/scripts/test-orchestration-plan.sh docs/woz-plans/<name>-plan.m
 | File | Read when |
 | --- | --- |
 | `references/batching-rules.md` | Deciding inline versus delegated, merging steps, assigning write keys, choosing worktrees and models |
-| `references/plan-template.md` | Writing the plan file; it defines the format the checker reads |
-| `references/execute-template.md` | Writing the execute file, or running a plan |
+| `references/plan-template.md` | Writing `PLAN.md`; it defines the format the checker reads |
+| `references/execute-template.md` | Writing `EXECUTE.md`, or running a plan |
 | `references/example.md` | Seeing a complete small plan and execute pair |

@@ -25,13 +25,13 @@ usage() {
     cat <<EOF
 Usage: $ScriptName FILE [FILE ...]
 
-Check one or more docs/woz-plans/<name>-plan.md files.
+Check one or more docs/woz-docs/spec-dev/<slug>/PLAN.md files.
 
 Options:
   -h, --help    Show this help
 
 Example:
-  $ScriptName docs/woz-plans/version-bump-ci-plan.md
+  $ScriptName docs/woz-docs/spec-dev/version-bump-ci/PLAN.md
 EOF
 }
 
@@ -214,18 +214,21 @@ END {
         }
     }
 
-    # plan_only needs its execute file beside the plan, naming the plan.
+    # plan_only needs EXECUTE.md beside PLAN.md, naming <slug>/PLAN.md.
     if (mode == "plan_only") {
         planName = path; sub(/.*[\\\/]/, "", planName)
-        if (planName !~ /-plan\.md$/) add(0, "plan file name must end in -plan.md")
+        if (planName != "PLAN.md") add(0, "plan file must be named PLAN.md")
         else {
-            execPath = path; sub(/-plan\.md$/, "-execute.md", execPath)
+            planDir = substr(path, 1, length(path) - length(planName))
+            execPath = planDir "EXECUTE.md"
+            slug = planDir; sub(/[\\\/]$/, "", slug); sub(/.*[\\\/]/, "", slug)
+            planRef = (slug == "" || slug == ".") ? planName : slug "/" planName
             content = ""; status = (getline lineText < execPath)
             if (status < 0) add(0, "plan_only plan needs execute file " execPath)
             else {
                 while (status > 0) { content = content lineText "\n"; status = (getline lineText < execPath) }
                 close(execPath)
-                if (index(content, planName) == 0) add(0, "execute file " execPath " does not reference " planName)
+                if (index(content, planRef) == 0) add(0, "execute file " execPath " does not reference " planRef)
             }
         }
     }

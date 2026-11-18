@@ -1,9 +1,10 @@
 # Plan Template
 
-Copy the template below into `docs/woz-plans/<name>-plan.md` and replace every bracketed placeholder. The headings and the bold field labels are the format the checker reads, so keep them exactly as written.
+Copy the template below into `docs/woz-docs/spec-dev/<slug>/PLAN.md` and replace every bracketed placeholder. The headings and the bold field labels are the format the checker reads, so keep them exactly as written.
 
 ## Format Rules
 
+- One level-1 heading: the task name followed by `Execution Plan`.
 - Level-2 headings, in this order: `Overall Goal`, `Operating Mode and Authorization`, `Context Manifest`, `Batches`, `Final Review`.
 - Each batch is a level-3 heading `### Batch <number>: <shared context or tool area>`, numbered from 1 with no repeats.
 - Every batch has five fields as top-level list items: `**Write Keys**`, `**Target Context**`, `**Dependencies**`, `**Acceptance Criteria**`, `**Instructions**`. Each needs a value on the same line or an indented list under it.
@@ -11,6 +12,7 @@ Copy the template below into `docs/woz-plans/<name>-plan.md` and replace every b
 - `**Mode**` holds `` `plan_only` `` or `` `plan_and_execute` ``.
 - Optional per-batch fields: `**Agent**` (agent type, model tier, worktree; `inline` alone when the orchestrator runs the batch itself), `**Approval**` (the user's yes this batch waits for), and `**Returns**` (what the report contains).
 - Model tier is `small` (mechanical work), `standard`, or `strongest` (design, review); the host maps it to a model.
+- Use `-` for every bullet and two-space indentation for nested lists.
 
 ## Template
 

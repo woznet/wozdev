@@ -3,7 +3,7 @@
     Checks an orchestration plan file against the orchestrate-subagents plan format.
 
     .DESCRIPTION
-    Reads one or more docs/woz-plans/<name>-plan.md files and reports every problem that would stop the plan
+    Reads one or more docs/woz-docs/spec-dev/<slug>/PLAN.md files and reports every problem that would stop the plan
     from running safely: missing sections, an invalid mode, batches missing a field, empty fields, write keys
     that are not backticked, dependencies on unknown batches or on the batch itself, dependency cycles, write
     keys held by two batches with no dependency path between them, and, in plan_only mode, a missing or
@@ -19,7 +19,7 @@
     One or more plan files to check. To pass several with -File, list them positionally (omit -Path).
 
     .EXAMPLE
-    pwsh -NoProfile -File Test-OrchestrationPlan.ps1 docs/woz-plans/version-bump-ci-plan.md
+    pwsh -NoProfile -File Test-OrchestrationPlan.ps1 docs/woz-docs/spec-dev/version-bump-ci/PLAN.md
     Checks one plan and, because it is plan_only, its execute file.
 
     .OUTPUTS
@@ -346,21 +346,24 @@ function Test-PlanFile {
         }
     }
 
-    # plan_only needs its execute file beside the plan, naming the plan.
+    # plan_only needs EXECUTE.md beside PLAN.md, naming <slug>/PLAN.md.
     if ($Mode -eq 'plan_only') {
         $PlanName = $PlanPath -replace '^.*[\\/]', ''
-        if ($PlanName -notmatch '-plan\.md$') {
-            Add-Finding -Line 0 -Message 'plan file name must end in -plan.md'
+        if ($PlanName -cne 'PLAN.md') {
+            Add-Finding -Line 0 -Message 'plan file must be named PLAN.md'
         }
         else {
-            $ExecutePath = $PlanPath -replace '-plan\.md$', '-execute.md'
+            $PlanDir = $PlanPath.Substring(0, $PlanPath.Length - $PlanName.Length)
+            $ExecutePath = $PlanDir + 'EXECUTE.md'
+            $Slug = $PlanDir -replace '[\\/]$', '' -replace '^.*[\\/]', ''
+            $PlanRef = if ($Slug -and $Slug -ne '.') { '{0}/{1}' -f $Slug, $PlanName } else { $PlanName }
             if (-not (Test-Path -LiteralPath $ExecutePath -PathType Leaf)) {
                 Add-Finding -Line 0 -Message ('plan_only plan needs execute file {0}' -f $ExecutePath)
             }
             else {
                 $ExecuteText = Get-Content -LiteralPath $ExecutePath -Raw -Encoding utf8
-                if ($null -eq $ExecuteText -or -not $ExecuteText.Contains($PlanName)) {
-                    Add-Finding -Line 0 -Message ('execute file {0} does not reference {1}' -f $ExecutePath, $PlanName)
+                if ($null -eq $ExecuteText -or -not $ExecuteText.Contains($PlanRef)) {
+                    Add-Finding -Line 0 -Message ('execute file {0} does not reference {1}' -f $ExecutePath, $PlanRef)
                 }
             }
         }

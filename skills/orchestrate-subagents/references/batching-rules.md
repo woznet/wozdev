@@ -39,7 +39,7 @@ A merge is allowed only when every hard gate passes:
 
 A write key names something a batch creates or changes.
 
-- Files: repo-relative path, forward slashes, lowercase, no leading `./`, in backticks: `` `skills/foo/skill.md` ``. A trailing `/` claims a whole tree: `` `docs/woz-plans/` ``.
+- Files: repo-relative path, forward slashes, lowercase, no leading `./`, in backticks: `` `skills/foo/skill.md` ``. A trailing `/` claims a whole tree: `` `docs/woz-docs/spec-dev/` ``.
 - Other resources: `` `resource:<system>-<object>` `` in kebab-case, for example `` `resource:github-pr` ``, `` `resource:github-branch-protection-main` ``, or `` `resource:git-config-core-hookspath` ``. Use the same name everywhere the resource appears, because the checker compares keys as text.
 - A batch that writes nothing lists `none`.
 

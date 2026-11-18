@@ -14,7 +14,7 @@ Why it is shaped this way:
 - Branch protection is a settings change behind an approval. It gets its own inline batch, never merged into a writing batch.
 - Writing the hook is too small to pay for its own agent, but it shares context with the README note, so the two run together.
 
-## `docs/woz-plans/version-bump-ci-plan.md`
+## `docs/woz-docs/spec-dev/version-bump-ci/PLAN.md`
 
 ````markdown
 # Version Bump Enforcement Execution Plan
@@ -97,12 +97,12 @@ Version 1.
   - Report each finding as blocking or non-blocking, with the owning batch.
 ````
 
-## `docs/woz-plans/version-bump-ci-execute.md`
+## `docs/woz-docs/spec-dev/version-bump-ci/EXECUTE.md`
 
 ```markdown
 # Execute: Version Bump Enforcement
 
-- **Plan Source**: `docs/woz-plans/version-bump-ci-plan.md`
+- **Plan Source**: `docs/woz-docs/spec-dev/version-bump-ci/PLAN.md`
 - **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required. The plan's own `Mode` line records how the plan was written and does not block this run.
 
 ## Execution Loop

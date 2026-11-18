@@ -1,6 +1,6 @@
 # Execute Template
 
-The execute file is the runtime loop for one plan and nothing more. Every rule, constraint, batch, and check lives in the plan file; repeating one here would let the two files disagree. Copy the template into `docs/woz-plans/<name>-execute.md`, replace `[Task Name]` and `<name>`, and keep the `Plan Source` line pointing at the plan file.
+The execute file is the runtime loop for one plan and nothing more. Every rule, constraint, batch, and check lives in the plan file; repeating one here would let the two files disagree. Copy the template into `docs/woz-docs/spec-dev/<slug>/EXECUTE.md`, beside its `PLAN.md`, replace `[Task Name]` and `<slug>`, and keep the `Plan Source` line pointing at the plan file.
 
 When running a plan in `plan_and_execute` mode without an execute file, follow the same loop.
 
@@ -9,7 +9,7 @@ When running a plan in `plan_and_execute` mode without an execute file, follow t
 ```markdown
 # Execute: [Task Name]
 
-- **Plan Source**: `docs/woz-plans/<name>-plan.md`
+- **Plan Source**: `docs/woz-docs/spec-dev/<slug>/PLAN.md`
 - **Execution Mode**: `plan_and_execute`. Running this file authorizes the work in the plan, within its Verbatim Restrictions and Approvals Required. The plan's own `Mode` line records how the plan was written and does not block this run.
 
 ## Execution Loop
