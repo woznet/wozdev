@@ -125,3 +125,5 @@ Tell the user:
 | Workflow never runs | The push didn't touch `wiki/**`, or it went to a branch other than `BRANCH` |
 | `deploy` job: "Pages not enabled" / 404 from deploy-pages | Do the Settings → Pages step |
 | Mermaid diagrams missing | `mermaid` and `vitepress-plugin-mermaid` missing from `wiki/package.json` |
+| `npm ci` / `npm install`: `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | The `overrides` entry for `vitepress-plugin-mermaid` is missing from `wiki/package.json`; restore it from the `wiki-vitepress` template |
+| `EBADENGINE` or a Mermaid build error on old Node | Mermaid 12 needs Node 22.12+; keep `node-version` at 22.12 or newer |

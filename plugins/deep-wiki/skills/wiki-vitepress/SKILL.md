@@ -4,7 +4,7 @@ description: Use when generated wiki Markdown needs to become a browsable VitePr
 license: MIT
 metadata:
   author: Microsoft (forked)
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Wiki VitePress Packager
@@ -74,7 +74,7 @@ Before building, fix every `wiki/**/*.md` (skip `node_modules/`, `.vitepress/`, 
 cd wiki && npm install && npm run build
 ```
 
-The output goes to `wiki/.vitepress/dist/`. Preview it with `npm run preview`. When the calling workflow says "no build" (crisp mode), skip this step and say so in the report.
+Requires Node 22.12 or newer (Mermaid 12). The output goes to `wiki/.vitepress/dist/`. Preview it with `npm run preview`. When the calling workflow says "no build" (crisp mode), skip this step and say so in the report.
 
 ## Known Gotchas
 
@@ -88,3 +88,5 @@ The output goes to `wiki/.vitepress/dist/`. Preview it with `npm run preview`. W
 | A light/dark toggle appears | `appearance: 'dark'` | Use `appearance: 'force-dark'` |
 | Broken assets on GitHub Pages | Wrong `base` | `'/<repo-name>/'` for project sites |
 | `isCustomElement` used to silence generics | Breaks rendering of real components | Escape generics instead |
+| `npm install` fails with `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | `vitepress-plugin-mermaid` predates Mermaid 12 | Keep the template's `overrides` entry in `wiki/package.json` |
+| Diagrams re-laid out or restyled (ELK layout, "neo" look) | Mermaid 12 defaults | Keep `layout: 'dagre'` and `look: 'classic'` in the `mermaid` config |

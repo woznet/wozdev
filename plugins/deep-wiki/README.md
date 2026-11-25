@@ -113,6 +113,7 @@ Compared with upstream 2.0.0:
 - **Deduplicated rules.** Repo resolution, citations, palette, and layout now live only in `wiki-conventions`. Commands are thin wrappers and agents preload skills. Upstream copies had drifted: two palettes, `wiki-site/` vs `wiki/`, and a missing `docs:build` script.
 - **Repo resolution** auto-detects the remote (SSH remotes converted to https), uses the default branch, and has host-specific citation formats. It asks only when there is no remote, and subagents never ask.
 - **VitePress**: templates ship as real files. Fixes: `appearance: 'force-dark'`; static assets in `wiki/public/` (not `.vitepress/public/`, which isn't served); a zoom modal that doesn't leak document listeners; a dynamic sidebar; CSS overrides that keep Mermaid accent colors.
+- **Dependencies**: Mermaid 12 (with an npm `overrides` entry so `vitepress-plugin-mermaid`, whose peer range stops at 11, installs cleanly), diagrams pinned to the classic dagre layout and look, and Node 22.12+ required.
 - **Deploy**: default branch trigger, Node 24, current action majors, a fixed owner/repo parse, and a no-lockfile variant without the `setup-node` cache lines that broke crisp deploys.
 - **ADO export**: a tested script that keeps cross-page wiki links (upstream flattened every `../` link) and lives in `wiki/scripts/` with a working `npm run build:ado`.
 - **Pipelines**: `generate` writes `wiki/catalogue.json` and dispatches parallel writer subagents; crisp phases respect dependencies (llms.txt runs last); onboarding writes to `wiki/onboarding/`.

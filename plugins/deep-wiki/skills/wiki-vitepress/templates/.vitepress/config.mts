@@ -146,6 +146,9 @@ export default withMermaid(
       footer: { message: 'Generated with deep-wiki' },
     },
     mermaid: {
+      // Mermaid 12 defaults to the ELK layout and the "neo" look; keep the classic dagre rendering.
+      layout: 'dagre',
+      look: 'classic',
       theme: 'dark',
       themeVariables: {
         darkMode: true,
