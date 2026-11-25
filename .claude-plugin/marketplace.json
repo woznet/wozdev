@@ -5,14 +5,20 @@
     "url": "https://github.com/woznet"
   },
   "metadata": {
-    "description": "Woz's AI development toolkit for Claude Code"
+    "description": "Woz's Claude Code plugins: the wozdev development toolkit and the deep-wiki documentation generator"
   },
   "plugins": [
     {
       "name": "wozdev",
-      "source": "./",
+      "source": "./plugins/wozdev",
       "description": "House-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), a prompt optimizer that measures before/after token cost, and a sub-agent orchestrator that writes checked, batched execution plans, and a build doc writer that turns rough notes into agent-actionable build documents, and a spec writer that turns notes into a paired PRD and technical spec",
       "category": "development"
+    },
+    {
+      "name": "deep-wiki",
+      "source": "./plugins/deep-wiki",
+      "description": "AI-powered wiki generator for code repositories: Mermaid-rich, source-cited documentation, a dark-mode VitePress site, onboarding guides, deep research, AGENTS.md and llms.txt (fork of microsoft/skills deep-wiki)",
+      "category": "documentation"
     }
   ]
 }

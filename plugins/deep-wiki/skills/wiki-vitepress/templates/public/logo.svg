@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Wiki logo">
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#2d333b" stroke="#6d5dfc" stroke-width="3"/>
+  <path d="M18 18 H40 L46 24 V46 H18 Z" fill="none" stroke="#6d5dfc" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M24 30 H40 M24 36 H40 M24 42 H34" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 24 H32" stroke="#8b7dff" stroke-width="3" stroke-linecap="round"/>
+</svg>
