@@ -1,7 +1,7 @@
 {
   "name": "wozdev",
-  "version": "0.1.13",
-  "description": "Woz's AI development toolkit - house-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), a prompt optimizer with a size and wording meter, and a sub-agent orchestrator that plans batched, dependency-ordered work with a plan checker, and a build doc writer that turns rough notes into agent-actionable build documents, and a spec writer that turns notes into a paired PRD and technical spec, with agents and hooks to come",
+  "version": "0.1.14",
+  "description": "AI development toolkit - house-style skills with bundled checkers for Markdown (rumdl) and PowerShell (PSScriptAnalyzer plus custom rules), a prompt optimizer with a size and wording meter, and a sub-agent orchestrator that plans batched, dependency-ordered work with a plan checker, and a build doc writer that turns rough notes into agent-actionable build documents, and a spec writer that turns notes into a paired PRD and technical spec, with agents and hooks to come",
   "author": {
     "name": "Woz",
     "url": "https://github.com/woznet"
