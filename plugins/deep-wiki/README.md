@@ -2,7 +2,7 @@
 
 A Claude Code plugin that generates structured, Mermaid-rich, source-cited documentation for any code repository. It produces a dark-only VitePress site, audience-tailored onboarding guides, deep research reports, `AGENTS.md` files, and `llms.txt`.
 
-This is a local fork of [deep-wiki from microsoft/skills](https://github.com/microsoft/skills/tree/main/.github/plugins/deep-wiki) (MIT). See [Changes in This Fork](#changes-in-this-fork).
+This is a fork of [deep-wiki from microsoft/skills](https://github.com/microsoft/skills/tree/main/.github/plugins/deep-wiki) (MIT). See [Changes in This Fork](#changes-in-this-fork).
 
 ## Installation
 
