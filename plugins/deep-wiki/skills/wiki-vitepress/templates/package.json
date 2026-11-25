@@ -7,6 +7,7 @@
     "build": "node scripts/check-wiki.mjs . --site && vitepress build",
     "check": "node scripts/check-wiki.mjs .",
     "indexes": "node scripts/gen-section-indexes.mjs .",
+    "llms": "node scripts/gen-llms.mjs .",
     "preview": "vitepress preview"
   },
   "devDependencies": {

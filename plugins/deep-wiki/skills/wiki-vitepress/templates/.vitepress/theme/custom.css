@@ -29,13 +29,17 @@
 
 /* ---------- Layout and content ---------- */
 /* The default theme caps the text column at 688px; wikis are table- and diagram-heavy.
-   The extra .VPContent ancestor outranks the default theme's scoped rules. */
-.VPContent .VPDoc.has-aside .content-container {
+   The two extra ancestors outrank the default theme's scoped rule of the same shape. */
+.Layout .VPContent .VPDoc.has-aside .content-container {
   max-width: 860px;
 }
-@media (min-width: 1440px) {
-  .VPContent .VPDoc.has-sidebar .container {
-    max-width: 1168px;
+/* The cap alone stops at 784px: the page frame (1440px) minus sidebar, outline, and padding.
+   Widen the frame on screens that have the room. Sidebar, nav bar, and content all derive
+   their offsets from this variable, so they stay aligned. Never set it wider than the
+   viewport: the offsets would go negative. */
+@media (min-width: 1536px) {
+  :root {
+    --vp-layout-max-width: 1536px;
   }
 }
 /* Nothing in a page may push past the text column into the outline. */
@@ -57,9 +61,16 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.VPSidebarItem.is-active > .item {
-  border-left: 2px solid var(--vp-c-brand-2);
-  padding-left: 8px;
+/* A marker beside the active item, drawn outside the text so the label does not shift. */
+.VPSidebarItem.is-active > .item::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: -10px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--vp-c-brand-2);
 }
 .vp-doc a {
   text-decoration: none;
@@ -87,11 +98,12 @@
 .vp-doc td a {
   overflow-wrap: anywhere;
 }
-.vp-doc td {
-  min-width: 7em;
-}
-.vp-doc th {
-  white-space: nowrap;
+/* With wrapping allowed anywhere, a narrow column could collapse to a few characters.
+   Phones are exempt: there a floor would force every 4-column table to scroll. */
+@media (min-width: 640px) {
+  .vp-doc td {
+    min-width: 6em;
+  }
 }
 .vp-doc th {
   background: #161b22;
@@ -99,6 +111,7 @@
   text-transform: uppercase;
   font-size: 0.8em;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 .vp-doc tr:nth-child(2n) {
   background: rgba(22, 27, 34, 0.6);
@@ -130,69 +143,47 @@
   cursor: zoom-in;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.mermaid-zoomable:hover {
+.mermaid-zoomable:hover,
+.mermaid-zoomable:focus-within {
   border-color: #6d5dfc;
   box-shadow: 0 0 20px rgba(109, 93, 252, 0.12);
 }
-.mermaid-zoomable:focus-visible {
-  outline: 2px solid #6d5dfc;
-  outline-offset: 2px;
-}
-.mermaid-zoomable::after {
-  content: 'Click to zoom';
+/* The real control: reachable by keyboard, shown on hover or focus. */
+.mermaid-zoom-button {
   position: absolute;
   right: 8px;
   bottom: 8px;
   padding: 2px 8px;
+  border: 1px solid #30363d;
   border-radius: 4px;
   background: #2d333b;
-  color: #8b949e;
-  font-size: 11px;
+  color: #e6edf3;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: zoom-in;
   opacity: 0;
   transition: opacity 0.2s;
-  pointer-events: none;
 }
-.mermaid-zoomable:hover::after {
+.mermaid-zoomable:hover > .mermaid-zoom-button,
+.mermaid-zoom-button:focus-visible {
   opacity: 1;
+}
+.mermaid-zoom-button:focus-visible {
+  outline: 2px solid #6d5dfc;
+  outline-offset: 2px;
 }
 
 /* ---------- Mermaid dark overrides ----------
-   Theme variables miss some shapes. These rules skip any element that carries an
-   inline `style` (from a Mermaid `style`/`classDef` directive), so accent colors survive. */
-.mermaid-diagram .node rect:not([style*='fill']),
-.mermaid-diagram .node circle:not([style*='fill']),
-.mermaid-diagram .node ellipse:not([style*='fill']),
-.mermaid-diagram .node polygon:not([style*='fill']),
-.mermaid-diagram .node path:not([style*='fill']),
-.mermaid-diagram .label-container:not([style*='fill']) {
+   The theme variables in config.mts color almost everything. Two things they miss, checked
+   against rendered diagrams: some shape containers keep a light fill, and some arrow markers
+   keep a black outline. The first rule skips any element that carries an inline `style` (from
+   a Mermaid `style`/`classDef` directive), so accent colors survive. `.mermaid-diagram-colors`
+   is the enlarged copy in the modal, which sits outside the page container. */
+:is(.mermaid-diagram, .mermaid-diagram-colors) .label-container:not([style*='fill']) {
   fill: #2d333b;
   stroke: #6d5dfc;
 }
-.mermaid-diagram .nodeLabel,
-.mermaid-diagram .edgeLabel,
-.mermaid-diagram .label {
-  color: #e6edf3;
-}
-.mermaid-diagram text:not([style*='fill']) {
-  fill: #e6edf3;
-}
-.mermaid-diagram .cluster rect:not([style*='fill']) {
-  fill: #161b22;
-  stroke: #30363d;
-}
-.mermaid-diagram .edgeLabel rect,
-.mermaid-diagram .edgeLabel p {
-  fill: #1c2333;
-  background-color: #1c2333;
-}
-.mermaid-diagram .flowchart-link,
-.mermaid-diagram .edgePath path,
-.mermaid-diagram .messageLine0,
-.mermaid-diagram .messageLine1 {
-  stroke: #8b949e;
-}
-.mermaid-diagram marker path {
-  fill: #8b949e;
+:is(.mermaid-diagram, .mermaid-diagram-colors) marker path {
   stroke: #8b949e;
 }
 
@@ -209,10 +200,6 @@
   border: 0;
   color: #e6edf3;
   background: rgba(13, 17, 23, 0.97);
-}
-.mermaid-modal::backdrop {
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
 }
 .mermaid-modal[open] {
   display: flex;
@@ -243,6 +230,7 @@
 }
 .mermaid-modal-viewport {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -253,13 +241,17 @@
 .mermaid-modal-viewport.is-panning {
   cursor: grabbing;
 }
+/* The stage is a box 90% of the viewport both ways; the SVG scales to fit inside it, so a
+   tall diagram is shrunk to the height instead of being cropped. */
 .mermaid-modal-stage {
   width: 90%;
+  height: 90%;
   transform-origin: center center;
 }
 .mermaid-modal-stage svg {
+  display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
 }
 
 /* ---------- Image zoom ---------- */
@@ -292,20 +284,26 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .focus-toggle:hover,
-.focus-toggle:focus-visible {
+.focus-toggle:focus-visible,
+.focus-toggle[aria-pressed='true'] {
   border-color: #6d5dfc;
 }
-html.focus-mode .VPSidebar,
-html.focus-mode .VPDocAside,
-html.focus-mode .aside {
-  display: none !important;
-}
-html.focus-mode .VPContent.has-sidebar {
-  padding-left: 0 !important;
-}
-html.focus-mode .VPDoc .container,
-html.focus-mode .VPDoc .content,
-html.focus-mode .VPDoc .content-container {
-  max-width: 1000px !important;
-  margin: 0 auto;
+/* Desktop only. Below 960px the sidebar is already a drawer behind the menu button, and
+   hiding it here would leave that button opening nothing. */
+@media (min-width: 960px) {
+  body.focus-mode .VPSidebar,
+  body.focus-mode .VPDoc .aside {
+    display: none !important;
+  }
+  /* Both paddings: from 1440px the default theme also pads the right side to centre the frame. */
+  body.focus-mode .VPContent.has-sidebar {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+  body.focus-mode .VPDoc .container,
+  body.focus-mode .VPDoc .content,
+  body.focus-mode .VPDoc .content-container {
+    max-width: 1000px !important;
+    margin: 0 auto !important;
+  }
 }

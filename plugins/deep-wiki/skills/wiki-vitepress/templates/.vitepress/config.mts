@@ -3,6 +3,9 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+// The scaffold always copies scripts/ next to .vitepress/, so the site, the checker, and the
+// generators share one frontmatter and catalogue reader.
+import { ONBOARDING_ORDER, loadCatalogue, loadState, parseFrontmatter, readText, walkCatalogue } from '../scripts/lib.mjs'
 
 // ---------------------------------------------------------------------------
 // Fill these in when scaffolding (see the wiki-vitepress skill).
@@ -20,61 +23,81 @@ const WIKI_DIR = 'wiki'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Read the page title from frontmatter, then the first H1, then the file name. */
+/** VitePress needs a leading and a trailing slash: 'repo' and '/repo' both become '/repo/'. */
+function normalizeBase(value: string): string {
+  const inner = value.trim().replace(/^\/+|\/+$/g, '')
+  return inner ? `/${inner}/` : '/'
+}
+const base = normalizeBase(BASE)
+
+/** `host` comes from wiki/.deep-wiki.json when the run recorded it; otherwise infer it from the URL. */
+function detectHost(): string {
+  let recorded: unknown
+  try {
+    recorded = (loadState(root) as { host?: string }).host
+  } catch {
+    // Unreadable state file: infer from the URL.
+  }
+  if (typeof recorded === 'string' && recorded) return recorded
+  let hostname = ''
+  try {
+    hostname = new URL(REPO_URL).hostname.toLowerCase()
+  } catch {
+    return 'local'
+  }
+  if (hostname === 'github.com' || hostname.startsWith('github.')) return 'github'
+  if (hostname.includes('gitlab')) return 'gitlab'
+  return 'other'
+}
+const host = detectHost()
+
+/** The page title: frontmatter, then the first H1 outside code fences, then the file name. */
 function titleOf(file: string): string {
-  const text = fs.readFileSync(file, 'utf8')
-  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  const fmTitle = fm?.[1].match(/^title:\s*(.+)$/m)
-  if (fmTitle) return fmTitle[1].trim().replace(/^['"]|['"]$/g, '')
-  const h1 = text.match(/^#\s+(.+)$/m)
-  return h1 ? h1[1].trim() : path.basename(file, '.md')
+  const text: string = readText(file)
+  const fm = parseFrontmatter(text)
+  const title = fm.data?.title
+  if (typeof title === 'string' && title.trim()) return title.trim()
+  let fence = ''
+  for (const line of text.split(/\r?\n/).slice(fm.lineCount)) {
+    const mark = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1]
+    if (fence) {
+      if (mark && mark[0] === fence[0] && mark.length >= fence.length) fence = ''
+    } else if (mark) {
+      fence = mark
+    } else {
+      const h1 = line.match(/^#\s+(.+?)\s*#*\s*$/)
+      if (h1) return h1[1]
+    }
+  }
+  return path.basename(file, '.md')
 }
 
 // Sidebar labels longer than this are a description, not a name: fall back to the folder name.
 const MAX_LABEL = 60
 
-type CatalogueNode = { name?: string; dir?: string; path?: string; children?: CatalogueNode[] }
+type CatalogueNode = { name?: string; path?: string }
 
-/** Section names and page order from catalogue.json, when the wiki has one. */
+/** Section names and reading order from catalogue.json, when the wiki has one. */
 function readCatalogue() {
   const names = new Map<string, string>()
   const order = new Map<string, number>()
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(root, 'catalogue.json'), 'utf8'))
     let n = 0
-    const walk = (nodes: CatalogueNode[], parent: string) => {
-      for (const node of nodes ?? []) {
-        let dir = parent
-        if (typeof node.dir === 'string') {
-          dir = node.dir.replace(/^\.?\/+|\/+$/g, '')
-          if (parent && !dir.startsWith(parent + '/')) dir = parent + '/' + dir
-          if (node.name) names.set(dir, node.name.trim())
-          order.set(dir, n++)
-        }
-        if (typeof node.path === 'string') order.set(node.path, n++)
-        walk(node.children ?? [], dir)
+    walkCatalogue(loadCatalogue(root)?.items, (node: CatalogueNode, ctx: { dir: string | null }) => {
+      if (ctx.dir) {
+        if (typeof node.name === 'string' && node.name.trim()) names.set(ctx.dir, node.name.trim())
+        order.set(ctx.dir, n++)
+      } else if (typeof node.path === 'string') {
+        order.set(node.path.replace(/\\/g, '/'), n++)
       }
-    }
-    walk(data.items, '')
+    })
   } catch {
-    // No catalogue (single-page or crisp runs): fall back to titles and file names.
+    // No catalogue, or an unreadable one (single-page and crisp runs): titles and file names decide.
   }
   return { names, order }
 }
 
 const catalogue = readCatalogue()
-
-/** Catalogue order first, then file name. */
-function byCatalogue(dir: string) {
-  return (a: string, b: string) => {
-    const ia = catalogue.order.get(dir + '/' + a)
-    const ib = catalogue.order.get(dir + '/' + b)
-    if (ia !== undefined && ib !== undefined) return ia - ib
-    if (ia !== undefined) return -1
-    if (ib !== undefined) return 1
-    return a.localeCompare(b)
-  }
-}
 
 function titleCase(dir: string): string {
   return path
@@ -99,78 +122,118 @@ function sectionName(dir: string): string {
 
 type SidebarItem = { text: string; link?: string; collapsed?: boolean; items?: SidebarItem[] }
 
-const EXCLUDED = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md', 'index.md'])
-const SKIPPED_DIRS = ['public', 'scripts', 'dist', 'node_modules']
+// Not pages: excluded from the site at any depth (see srcExclude) and never listed.
+const NOT_PAGES = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md'])
+// Not content folders, at the wiki root only. A nested section may use any of these names.
+const ROOT_ONLY_SKIPPED = new Set(['public', 'scripts', 'dist', 'node_modules'])
 
-/** A collapsible group for one folder. Its heading links to the folder's index.md when there is one. */
-function group(dir: string, text: string, collapsed: boolean): SidebarItem {
-  const hasIndex = fs.existsSync(path.join(root, dir, 'index.md'))
-  return { text, collapsed, items: pagesIn(dir), ...(hasIndex ? { link: '/' + dir + '/' } : {}) }
+/** The sidebar renders labels as HTML, so `List<T>` would lose its `<T>`. */
+const label = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+
+const isPage = (name: string) => name.endsWith('.md') && !NOT_PAGES.has(name)
+const isContentDir = (dir: string, name: string) => !name.startsWith('.') && !(dir === '' && ROOT_ONLY_SKIPPED.has(name))
+
+/** Sort names inside `dir`: catalogue order, then the given fixed order, then alphabetical. */
+function ordered(dir: string, names: string[], fixed: readonly string[] = []): string[] {
+  const rank = (name: string): [number, number] => {
+    const inCatalogue = catalogue.order.get(dir ? `${dir}/${name}` : name)
+    if (inCatalogue !== undefined) return [0, inCatalogue]
+    const inFixed = fixed.indexOf(name)
+    return inFixed >= 0 ? [1, inFixed] : [2, 0]
+  }
+  return [...names].sort((a, b) => {
+    const ra = rank(a)
+    const rb = rank(b)
+    return ra[0] - rb[0] || ra[1] - rb[1] || a.localeCompare(b)
+  })
 }
 
 /**
- * Pages in a folder (its index.md is the group heading, not an item), then one group per
- * sub-folder, recursively, so a catalogue up to four levels deep is fully reachable.
+ * Pages and sub-folders of `dir` in reading order, recursively, so a catalogue up to four levels
+ * deep is fully reachable. A folder's index.md is its group heading, not an item.
  */
-function pagesIn(dir: string): SidebarItem[] {
+function itemsIn(dir: string, fixed: readonly string[] = []): SidebarItem[] {
   const entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true })
-  const pages: SidebarItem[] = entries
-    .filter((e) => e.isFile() && e.name.endsWith('.md') && !EXCLUDED.has(e.name))
+  const names = entries
+    .filter((e) => (e.isFile() ? isPage(e.name) && e.name !== 'index.md' : e.isDirectory() && isContentDir(dir, e.name)))
     .map((e) => e.name)
-    .sort(byCatalogue(dir))
-    .map((f) => ({
-      text: titleOf(path.join(root, dir, f)),
-      link: '/' + dir + '/' + f.replace(/\.md$/, ''),
-    }))
-  const groups: SidebarItem[] = entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_DIRS.includes(e.name))
-    .map((e) => e.name)
-    .sort(byCatalogue(dir))
-    .map((sub) => group(dir + '/' + sub, sectionName(dir + '/' + sub), true))
-    .filter((g) => (g.items?.length ?? 0) > 0 || g.link)
-  return [...pages, ...groups]
+  const dirs = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name))
+  const items: SidebarItem[] = []
+  for (const name of ordered(dir, names, fixed)) {
+    const rel = dir ? `${dir}/${name}` : name
+    if (dirs.has(name)) {
+      const sub = group(rel, sectionName(rel), true)
+      if (sub) items.push(sub)
+    } else {
+      items.push({ text: label(titleOf(path.join(root, rel))), link: `/${rel.replace(/\.md$/, '')}` })
+    }
+  }
+  return items
 }
 
-/** Onboarding first (expanded), then numbered sections; the first three expanded. */
-function buildSidebar() {
-  const numbered = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d+-/.test(d.name))
-    .map((d) => d.name)
-    .sort()
+/** A collapsible group for one folder, or null when the folder has no pages at all. */
+function group(dir: string, text: string, collapsed: boolean, fixed: readonly string[] = []): SidebarItem | null {
+  const items = itemsIn(dir, fixed)
+  const hasIndex = fs.existsSync(path.join(root, dir, 'index.md'))
+  if (!items.length && !hasIndex) return null
+  return { text: label(text), collapsed, items, ...(hasIndex ? { link: `/${dir}/` } : {}) }
+}
 
-  const groups: SidebarItem[] = []
-  if (fs.existsSync(path.join(root, 'onboarding'))) groups.push(group('onboarding', 'Onboarding', false))
+/**
+ * Home, Onboarding (expanded), the numbered sections (first three expanded), then anything else
+ * the wiki holds: other folders such as research/, and root pages such as changelog.md.
+ */
+function buildSidebar(): SidebarItem[] {
+  const entries = fs.readdirSync(root, { withFileTypes: true })
+  const folders = entries.filter((e) => e.isDirectory() && isContentDir('', e.name)).map((e) => e.name)
+  const numbered = folders.filter((d) => /^\d+-/.test(d)).sort()
+  const others = folders.filter((d) => !/^\d+-/.test(d) && d !== 'onboarding').sort()
+  const rootPages = entries.filter((e) => e.isFile() && isPage(e.name) && e.name !== 'index.md').map((e) => e.name)
+
+  const groups: (SidebarItem | null)[] = []
+  if (folders.includes('onboarding')) groups.push(group('onboarding', 'Onboarding', false, ONBOARDING_ORDER))
   numbered.forEach((dir, i) => groups.push(group(dir, sectionName(dir), i >= 3)))
-  return [{ text: 'Home', link: '/' }, ...groups]
+  others.forEach((dir) => groups.push(group(dir, sectionName(dir), true)))
+  if (rootPages.length) {
+    const items = ordered('', rootPages).map((f) => ({ text: label(titleOf(path.join(root, f))), link: `/${f.replace(/\.md$/, '')}` }))
+    groups.push({ text: 'More', collapsed: true, items })
+  }
+  return [{ text: 'Home', link: '/' }, ...groups.filter((g): g is SidebarItem => g !== null)]
 }
 
 function editLink() {
   if (!REPO_URL || !BRANCH) return undefined
-  if (REPO_URL.includes('github.com')) {
-    return { pattern: `${REPO_URL}/edit/${BRANCH}/${WIKI_DIR}/:path`, text: 'Edit this page' }
-  }
-  if (REPO_URL.includes('gitlab')) {
-    return { pattern: `${REPO_URL}/-/edit/${BRANCH}/${WIKI_DIR}/:path`, text: 'Edit this page' }
-  }
+  if (host === 'github') return { pattern: `${REPO_URL}/edit/${BRANCH}/${WIKI_DIR}/:path`, text: 'Edit this page' }
+  if (host === 'gitlab') return { pattern: `${REPO_URL}/-/edit/${BRANCH}/${WIKI_DIR}/:path`, text: 'Edit this page' }
   return undefined
 }
+
+function socialLinks() {
+  if (!REPO_URL) return []
+  if (host === 'github') return [{ icon: 'github' as const, link: REPO_URL }]
+  if (host === 'gitlab') return [{ icon: 'gitlab' as const, link: REPO_URL }]
+  return []
+}
+
+const hasPage = (rel: string) => fs.existsSync(path.join(root, rel))
 
 export default withMermaid(
   defineConfig({
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    base: BASE,
+    base,
     cleanUrls: true,
     lastUpdated: true,
     // A broken link between wiki pages fails the build. Exempt: localhost URLs and the
     // agent/readme files that srcExclude keeps out of the site.
     ignoreDeadLinks: [/^https?:\/\/(localhost|127\.0\.0\.1)/, /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/],
-    srcExclude: ['AGENTS.md', 'CLAUDE.md', 'README.md', 'scripts/**', 'dist/**'],
+    // Agent and readme files are not pages at any depth; scripts/ holds the wiki's Node tools.
+    // Root-level only for the folders, matching listPages() in scripts/lib.mjs.
+    srcExclude: ['**/AGENTS.md', '**/CLAUDE.md', '**/README.md', 'scripts/**', 'dist/**'],
     // Dark only: no light/dark toggle.
     appearance: 'force-dark',
     head: [
-      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${BASE}logo.svg` }],
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
       ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
       ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
       [
@@ -201,15 +264,14 @@ export default withMermaid(
       logo: '/logo.svg',
       nav: [
         { text: 'Home', link: '/' },
-        // Only when the hub exists: /deep-wiki:page and crisp runs may not write onboarding.
-        ...(fs.existsSync(path.join(root, 'onboarding', 'index.md'))
-          ? [{ text: 'Onboarding', link: '/onboarding/' }]
-          : []),
+        // Only what exists: single-page and crisp runs may not write onboarding or a changelog.
+        ...(hasPage('onboarding/index.md') ? [{ text: 'Onboarding', link: '/onboarding/' }] : []),
+        ...(hasPage('changelog.md') ? [{ text: 'Changelog', link: '/changelog' }] : []),
       ],
       sidebar: buildSidebar(),
       outline: { level: [2, 3] },
       search: { provider: 'local' },
-      socialLinks: REPO_URL.includes('github.com') ? [{ icon: 'github', link: REPO_URL }] : [],
+      socialLinks: socialLinks(),
       editLink: editLink(),
       footer: { message: 'Generated with deep-wiki' },
     },
