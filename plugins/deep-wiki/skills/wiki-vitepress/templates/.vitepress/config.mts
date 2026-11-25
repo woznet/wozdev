@@ -30,10 +30,53 @@ function titleOf(file: string): string {
   return h1 ? h1[1].trim() : path.basename(file, '.md')
 }
 
-/** "02-getting-started" -> "Getting Started" (index.md title wins when present). */
-function sectionName(dir: string): string {
-  const index = path.join(root, dir, 'index.md')
-  if (fs.existsSync(index)) return titleOf(index)
+// Sidebar labels longer than this are a description, not a name: fall back to the folder name.
+const MAX_LABEL = 60
+
+type CatalogueNode = { name?: string; dir?: string; path?: string; children?: CatalogueNode[] }
+
+/** Section names and page order from catalogue.json, when the wiki has one. */
+function readCatalogue() {
+  const names = new Map<string, string>()
+  const order = new Map<string, number>()
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, 'catalogue.json'), 'utf8'))
+    let n = 0
+    const walk = (nodes: CatalogueNode[], parent: string) => {
+      for (const node of nodes ?? []) {
+        let dir = parent
+        if (typeof node.dir === 'string') {
+          dir = node.dir.replace(/^\.?\/+|\/+$/g, '')
+          if (parent && !dir.startsWith(parent + '/')) dir = parent + '/' + dir
+          if (node.name) names.set(dir, node.name.trim())
+          order.set(dir, n++)
+        }
+        if (typeof node.path === 'string') order.set(node.path, n++)
+        walk(node.children ?? [], dir)
+      }
+    }
+    walk(data.items, '')
+  } catch {
+    // No catalogue (single-page or crisp runs): fall back to titles and file names.
+  }
+  return { names, order }
+}
+
+const catalogue = readCatalogue()
+
+/** Catalogue order first, then file name. */
+function byCatalogue(dir: string) {
+  return (a: string, b: string) => {
+    const ia = catalogue.order.get(dir + '/' + a)
+    const ib = catalogue.order.get(dir + '/' + b)
+    if (ia !== undefined && ib !== undefined) return ia - ib
+    if (ia !== undefined) return -1
+    if (ib !== undefined) return 1
+    return a.localeCompare(b)
+  }
+}
+
+function titleCase(dir: string): string {
   return path
     .basename(dir)
     .replace(/^\d+-/, '')
@@ -42,30 +85,49 @@ function sectionName(dir: string): string {
     .join(' ')
 }
 
+/** Catalogue name, then a short index.md title, then "02-getting-started" -> "Getting Started". */
+function sectionName(dir: string): string {
+  const named = catalogue.names.get(dir)
+  if (named && named.length <= MAX_LABEL) return named
+  const index = path.join(root, dir, 'index.md')
+  if (fs.existsSync(index)) {
+    const title = titleOf(index)
+    if (title.length <= MAX_LABEL && !/undefined$/.test(title)) return title
+  }
+  return titleCase(dir)
+}
+
 type SidebarItem = { text: string; link?: string; collapsed?: boolean; items?: SidebarItem[] }
 
-const EXCLUDED = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md'])
+const EXCLUDED = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md', 'index.md'])
+const SKIPPED_DIRS = ['public', 'scripts', 'dist', 'node_modules']
+
+/** A collapsible group for one folder. Its heading links to the folder's index.md when there is one. */
+function group(dir: string, text: string, collapsed: boolean): SidebarItem {
+  const hasIndex = fs.existsSync(path.join(root, dir, 'index.md'))
+  return { text, collapsed, items: pagesIn(dir), ...(hasIndex ? { link: '/' + dir + '/' } : {}) }
+}
 
 /**
- * Pages in `dir`, then one collapsible group per sub-folder, recursively, so a
- * catalogue up to four levels deep is fully reachable from the sidebar.
+ * Pages in a folder (its index.md is the group heading, not an item), then one group per
+ * sub-folder, recursively, so a catalogue up to four levels deep is fully reachable.
  */
 function pagesIn(dir: string): SidebarItem[] {
   const entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true })
   const pages: SidebarItem[] = entries
     .filter((e) => e.isFile() && e.name.endsWith('.md') && !EXCLUDED.has(e.name))
     .map((e) => e.name)
-    .sort((a, b) => (a === 'index.md' ? -1 : b === 'index.md' ? 1 : a.localeCompare(b)))
+    .sort(byCatalogue(dir))
     .map((f) => ({
       text: titleOf(path.join(root, dir, f)),
-      link: `/${dir}/${f === 'index.md' ? '' : f.replace(/\.md$/, '')}`,
+      link: '/' + dir + '/' + f.replace(/\.md$/, ''),
     }))
   const groups: SidebarItem[] = entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !['public', 'scripts', 'dist', 'node_modules'].includes(e.name))
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_DIRS.includes(e.name))
     .map((e) => e.name)
-    .sort()
-    .map((sub) => ({ text: sectionName(`${dir}/${sub}`), collapsed: true, items: pagesIn(`${dir}/${sub}`) }))
-    .filter((g) => g.items.length > 0)
+    .sort(byCatalogue(dir))
+    .map((sub) => group(dir + '/' + sub, sectionName(dir + '/' + sub), true))
+    .filter((g) => (g.items?.length ?? 0) > 0 || g.link)
   return [...pages, ...groups]
 }
 
@@ -78,12 +140,8 @@ function buildSidebar() {
     .sort()
 
   const groups: SidebarItem[] = []
-  if (fs.existsSync(path.join(root, 'onboarding'))) {
-    groups.push({ text: 'Onboarding', collapsed: false, items: pagesIn('onboarding') })
-  }
-  numbered.forEach((dir, i) => {
-    groups.push({ text: sectionName(dir), collapsed: i >= 3, items: pagesIn(dir) })
-  })
+  if (fs.existsSync(path.join(root, 'onboarding'))) groups.push(group('onboarding', 'Onboarding', false))
+  numbered.forEach((dir, i) => groups.push(group(dir, sectionName(dir), i >= 3)))
   return [{ text: 'Home', link: '/' }, ...groups]
 }
 
@@ -105,8 +163,9 @@ export default withMermaid(
     base: BASE,
     cleanUrls: true,
     lastUpdated: true,
-    // Pages cite source files outside the wiki; those links are not site routes.
-    ignoreDeadLinks: true,
+    // A broken link between wiki pages fails the build. Exempt: localhost URLs and the
+    // agent/readme files that srcExclude keeps out of the site.
+    ignoreDeadLinks: [/^https?:\/\/(localhost|127\.0\.0\.1)/, /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/],
     srcExclude: ['AGENTS.md', 'CLAUDE.md', 'README.md', 'scripts/**', 'dist/**'],
     // Dark only: no light/dark toggle.
     appearance: 'force-dark',
@@ -125,6 +184,15 @@ export default withMermaid(
     markdown: {
       theme: { light: 'github-dark', dark: 'github-dark' },
       lineNumbers: true,
+      config(md) {
+        // Vue would evaluate "{{ ... }}" inside inline code (GitHub Actions expressions,
+        // template syntax) and fail the build. Fenced blocks already get v-pre.
+        const inline = md.renderer.rules.code_inline!
+        md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
+          tokens[idx].attrSet('v-pre', '')
+          return inline(tokens, idx, options, env, self)
+        }
+      },
     },
     vite: {
       optimizeDeps: { include: ['mermaid'] },

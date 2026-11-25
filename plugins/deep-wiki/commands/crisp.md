@@ -12,7 +12,7 @@ Load the `deep-wiki:wiki-conventions` skill first. Use its **crisp** thresholds 
 ## Phase 1: Context and Scan (sequential)
 
 1. Resolve `REPO_URL`, `HOST`, and `BRANCH` as the conventions describe.
-2. Scan once. List the tree to depth 3 (skip `node_modules/`, `.git/`, `dist/`, `wiki/`), then read the README, the manifests, and at most 10–15 key source files (entry points, main config, 2–3 core modules). Batch the reads and don't re-read files.
+2. Scan once, read-only: do not run the project's tests, builds, or scripts. List the tree to depth 3 (skip `node_modules/`, `.git/`, `dist/`, `wiki/`), then read the README, the manifests, and at most 10–15 key source files (entry points, main config, 2–3 core modules). Batch the reads and don't re-read files.
 
 ## Phase 2: Pages and Onboarding (parallel)
 
@@ -34,7 +34,7 @@ Each page follows the `deep-wiki:wiki-page-writer` structure scaled to crisp mod
 
 ## Phase 3: Site Scaffold (after Phase 2)
 
-Follow the `deep-wiki:wiki-vitepress` skill with the build step skipped: copy the templates, fill in the placeholders, write `wiki/index.md`, and post-process the Markdown. Crisp creates no section `index.md` files, so the landing page's Documentation Map links each section's page directly (for example `./01-architecture/overview.md`), never a bare folder route.
+Follow the `deep-wiki:wiki-vitepress` skill with the build step skipped: copy the templates, fill in the placeholders, and write `wiki/index.md`. Then run `node wiki/scripts/check-wiki.mjs wiki --mode crisp` and fix every error it reports (it needs only Node, not `npm install`). Crisp creates no section `index.md` files, so the landing page's Documentation Map links each section's page directly (for example `./01-architecture/overview.md`), never a bare folder route.
 
 ## Phase 4: Agent Files, llms.txt, and Deploy (after Phase 3)
 

@@ -33,13 +33,13 @@ Write one evidence-based documentation page: it explains why the code exists bef
    | Large | > 300 (sample entry points, domain models, data access, integration edges) | 5,000–8,000 | 5–8, of 4+ types |
 
    In crisp mode, write 600–1,500 words and 1–2 diagrams.
-2. **Analyze (40%).** Read every relevant file completely. Trace call chains end to end. Record a `file:line` anchor for each fact you will state.
+2. **Analyze (40%).** Read every relevant file completely. Trace call chains end to end. Record a `file:line` anchor for each fact you will state, taken from the file as you read it. A catalogue `prompt` is a pointer, not a fact: if it names a line, a mechanism, or a term the source does not bear out, follow the source. Read only; do not run the project's tests, builds, or scripts.
 3. **Write (40%).** Use the page structure below.
-4. **Validate (10%).** Run the checklist below and fix anything that fails.
+4. **Validate (10%).** Run the checker on the page, then the checklist below, and fix anything that fails.
 
 ## Page Structure
 
-1. Frontmatter: `title`, `description`, and `outline: deep` for medium or large pages.
+1. Frontmatter: `title` (the catalogue `name`, at most 60 characters), `description` (one sentence), and `outline: deep` for medium or large pages.
 2. `# Title`, then an **Overview** that says why this component exists and what problem it solves.
 3. An **at-a-glance table**: `Component | Responsibility | Key File | Source`.
 4. **Architecture**: a `graph`/`flowchart` diagram.
@@ -54,14 +54,14 @@ Writing rules:
 
 - Start each major section with a 1–2 sentence TL;DR or a summary table.
 - One idea per paragraph. Turn any list of structured items into a table.
+- Keep tables narrow: at most 5 columns, and in a cell cite `file.ext:lines` as the link text with the full path in the URL.
 - Mix prose, diagrams, tables, and code so there are no long walls of text.
 - Link inline to sibling pages whenever a concept is covered there. Make links bidirectional when you are also writing the other page.
 
 ## Validation Checklist
 
-- [ ] The page meets the conventions thresholds for its mode (diagram count and types, distinct cited files).
-- [ ] Every file path, class, and function named exists. Spot-check line numbers against the source.
-- [ ] Every Mermaid block parses, uses the dark palette, has `autonumber` in sequence diagrams, and is followed by `<!-- Sources: ... -->`.
-- [ ] No bare generics or `<br/>` outside code fences.
+- [ ] `node wiki/scripts/check-wiki.mjs wiki --page <path>` (with `--mode crisp` in crisp mode) reports no errors. It checks frontmatter, thresholds, citations, Mermaid rules, `{{ }}`, bare tags, tables, and links. If the script is not in `wiki/scripts/` yet, check those by hand against the conventions.
+- [ ] Every class and function named exists, and each cited line range shows what the sentence says it shows.
+- [ ] Every Mermaid block parses and uses the dark palette.
 - [ ] Every relative `.md` link points to a page that exists or that the caller listed as a sibling.
 - [ ] Inferences are marked as inferences, and nothing is guessed from names.

@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "build": "node scripts/check-wiki.mjs . --site && vitepress build",
+    "check": "node scripts/check-wiki.mjs .",
+    "indexes": "node scripts/gen-section-indexes.mjs .",
     "preview": "vitepress preview"
   },
   "devDependencies": {

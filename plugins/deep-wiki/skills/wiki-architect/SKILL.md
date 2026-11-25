@@ -18,7 +18,8 @@ Analyze the repository and produce the wiki catalogue: a hierarchical table of c
 1. **Scan** the file tree (skip `node_modules/`, `dist/`, `.git/`, vendored code, and `wiki/` itself) and read the README.
 2. **Detect** languages (from extensions and manifests: `package.json`, `pyproject.toml`, `*.csproj`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.psd1`, `Dockerfile`, …), frameworks, entry points, build and CI configuration, and key technologies (datastores, messaging, protocols).
 3. **Identify** the natural decomposition: layers, modules, services, and their boundaries. Read enough code to confirm each boundary instead of trusting folder names.
-4. **Write** the catalogue to `wiki/catalogue.json` (create `wiki/` if needed) using the schema below, then show it to the caller.
+4. **Write** the catalogue to `wiki/catalogue.json` (create `wiki/` if needed) using the schema below.
+5. **Verify** it. If `wiki/scripts/check-wiki.mjs` exists, run `node wiki/scripts/check-wiki.mjs wiki --catalogue-only` and fix what it reports. Then reread the file you wrote and count its leaves. Report that count, not the number you planned.
 
 ## Catalogue Schema
 
@@ -31,12 +32,13 @@ Analyze the repository and produce the wiki catalogue: a hierarchical table of c
       "title": "getting-started",
       "name": "Getting Started",
       "dir": "01-getting-started",
+      "description": "What the project is, how to install it, and how to run it for the first time.",
       "children": [
         {
           "title": "setup",
           "name": "Setup and First Run",
           "path": "01-getting-started/setup.md",
-          "prompt": "Document prerequisites and the dev loop from package.json:5-20 and README.md:30-60.",
+          "prompt": "Document prerequisites and the dev loop from package.json (scripts) and README.md (Development section).",
           "children": []
         }
       ]
@@ -48,10 +50,11 @@ Analyze the repository and produce the wiki catalogue: a hierarchical table of c
 | Field | Rule |
 |-------|------|
 | `title` | kebab-case slug, unique among siblings |
-| `name` | Display name taken from the code, never a placeholder |
-| `dir` | Section nodes only: `NN-slug`, numbered in reading order |
+| `name` | Display name taken from the code, never a placeholder. At most 60 characters: it is the sidebar label and the page title |
+| `dir` | Section nodes only: the folder relative to `wiki/`. Top level is `NN-slug`, numbered in reading order; a nested section is `NN-slug/sub-slug` |
+| `description` | Section nodes only: one sentence on what the section covers. It becomes the introduction of the section's `index.md` |
 | `path` | Leaf nodes only: the page file, relative to `wiki/` |
-| `prompt` | 1–3 sentences naming the files (with `file:line`) the writer must read |
+| `prompt` | 1–3 sentences naming the files the writer must read and what to explain. Name files and symbols. Add a line range only for a file you opened and read; never take line numbers from search output |
 | `children` | Empty for leaves |
 
 ## Structure Rules
@@ -60,9 +63,11 @@ Analyze the repository and produce the wiki catalogue: a hierarchical table of c
 - Max depth 4; max 8 children per node.
 - Small repos (≤ 10 source files): Getting Started only, with 1–3 leaves.
 - Every leaf's `prompt` cites at least two real files. Never reference a file you have not seen in the scan.
+- Describe what the code does now. Check each term in a `name` or `prompt` against the current source, not against a README, comment, or commit message that may be out of date.
+- A node has `dir` or `path`, never both. Do not add `index.md` leaves: section index pages are generated from the catalogue.
 - Split a leaf when its prompt would need more than ~15 files; merge leaves that would cite the same 2–3 files.
 
 ## Output
 
 1. `wiki/catalogue.json`.
-2. A short summary table for the caller: `Section | Pages | Key files`.
+2. A short summary table for the caller: `Section | Pages | Key files`, with the page counts taken from the written file.
