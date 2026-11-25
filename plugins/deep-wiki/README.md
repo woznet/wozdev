@@ -28,6 +28,56 @@ claude plugin validate plugins/deep-wiki
 
 Claude Code caches the plugin by the `version` in `plugins/deep-wiki/.claude-plugin/plugin.json`, so every release raises it. To pick up a release, run `claude plugin marketplace update wozdev`, then `claude plugin update deep-wiki@wozdev`, and restart Claude Code.
 
+## Quick Start
+
+### 1. Prerequisites
+
+- Claude Code with the plugin [installed](#installation), started from the root of the repository you want to document.
+- A git remote is optional. With one, citations become links for GitHub, GitLab, and Azure DevOps. Without one, the plugin asks for the repository context once.
+- Node.js 22.12 or later, only for building or previewing the site.
+
+### 2. Generate a Wiki
+
+Pick one of the two pipelines:
+
+```text
+/deep-wiki:crisp
+/deep-wiki:generate
+```
+
+- `/deep-wiki:crisp` is the fast path: 5–8 dense pages, a contributor guide, and a site scaffold, with no npm build. Use it for a first run or a small project.
+- `/deep-wiki:generate` is the full pipeline: catalogue, pages written by parallel subagents, four onboarding guides, the VitePress site, `AGENTS.md`, `llms.txt`, and a build. Add a focus area to narrow it (`/deep-wiki:generate src/api`) or `--no-build` to skip npm.
+
+Running `generate` again on an existing `wiki/` asks whether to regenerate everything or only fill in the missing pages.
+
+### 3. Preview the Site
+
+```bash
+cd wiki && npm install && npm run dev
+```
+
+After `generate`, the dependencies are already installed, so `npm run dev` is enough.
+
+### 4. Publish
+
+- **GitHub Pages**: run `/deep-wiki:deploy` to add `.github/workflows/deploy-wiki.yml`, then set **Settings → Pages → Source** to **GitHub Actions** once.
+- **Azure DevOps Wiki**: run `/deep-wiki:ado` to export a compatible copy to `wiki/dist/ado-wiki/`.
+
+Commit `wiki/` and any generated root files (`llms.txt`, `AGENTS.md`, `CLAUDE.md`) before you push.
+
+### 5. Beyond the Wiki
+
+| I want to… | Run |
+|------------|-----|
+| Ask a question about the code | `/deep-wiki:ask How is authentication handled?` |
+| Investigate a topic in depth | `/deep-wiki:research request lifecycle --write` |
+| Write or redo one page | `/deep-wiki:page caching src/cache/` |
+| Get onboarding for one audience | `/deep-wiki:onboard staff` |
+| Produce release notes | `/deep-wiki:changelog --since 2026-10-01 --write` |
+| Give coding agents instructions | `/deep-wiki:agents` and `/deep-wiki:llms` |
+
+Plain requests work too: "what changed this month?" triggers the changelog skill. [Commands](#commands) lists every command and its arguments.
+
 ## Commands
 
 | Command | Description |
