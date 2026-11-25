@@ -1,3 +1,7 @@
+# dev temp locations
+/.temp
+/.playwright-mcp
+
 # rumdl lint cache
 .rumdl_cache/
 
