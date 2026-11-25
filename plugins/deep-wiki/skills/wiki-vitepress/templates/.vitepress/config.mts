@@ -133,7 +133,10 @@ export default withMermaid(
       logo: '/logo.svg',
       nav: [
         { text: 'Home', link: '/' },
-        { text: 'Onboarding', link: '/onboarding/' },
+        // Only when the hub exists: /deep-wiki:page and crisp runs may not write onboarding.
+        ...(fs.existsSync(path.join(root, 'onboarding', 'index.md'))
+          ? [{ text: 'Onboarding', link: '/onboarding/' }]
+          : []),
       ],
       sidebar: buildSidebar(),
       outline: { level: [2, 3] },

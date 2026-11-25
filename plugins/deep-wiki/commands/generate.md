@@ -13,15 +13,17 @@ Load the `deep-wiki:wiki-conventions` skill first. Every step below follows it.
 
 Resolve `REPO_URL`, `HOST`, and `BRANCH` once, as the conventions describe (detect; ask only if there is no remote). Every subagent prompt in later steps includes these three values.
 
-If `wiki/` already has pages, ask the user whether to regenerate everything, fill only the missing pages from the catalogue, or stop.
+If `wiki/` already has pages, ask the user whether to regenerate everything, fill only the missing pages from the catalogue, or stop. Record the answer as `MODE_WRITE` (`regenerate` or `fill-missing`) and apply it in every writing step below.
+
+In `fill-missing` mode, never overwrite an existing output file. Before each write or dispatch, check whether the target path exists, and skip it if it does. Add each skipped path to the report's "skipped because they already existed" list. This covers `wiki/catalogue.json` (reuse it rather than re-dispatching the architect), each catalogue leaf, each section `index.md`, each onboarding guide and `wiki/onboarding/index.md`, `wiki/index.md`, and the files that Step 4 copies from the templates. Step 4's post-processing touches only pages written in this run.
 
 ## Step 1: Catalogue
 
-Dispatch the `deep-wiki:wiki-architect` subagent with the repository context, mode `full`, and any focus from the arguments. It writes `wiki/catalogue.json`. Read the file and show the user the section summary.
+Dispatch the `deep-wiki:wiki-architect` subagent with the repository context, mode `full`, and any focus from the arguments. It writes `wiki/catalogue.json`. In `fill-missing` mode, if `wiki/catalogue.json` already exists, skip the architect and use that file. Read the file and show the user the section summary.
 
 ## Step 2: Pages
 
-For every leaf in the catalogue, dispatch a `deep-wiki:wiki-writer` subagent. Each prompt contains:
+For every leaf in the catalogue, dispatch a `deep-wiki:wiki-writer` subagent. In `fill-missing` mode, dispatch writers only for leaves whose `wiki/<path>` does not exist yet. Each prompt contains:
 
 - `REPO_URL`, `HOST`, `BRANCH`, and mode `full`
 - the leaf's `path` (under `wiki/`), `name`, and `prompt`
@@ -33,11 +35,11 @@ For each section `dir` without its own page, write a short `wiki/<dir>/index.md`
 
 ## Step 3: Onboarding
 
-Follow the `deep-wiki:wiki-onboarding` skill to write the four guides and the hub in `wiki/onboarding/`. Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, giving each guide's required sections as its task. Write `wiki/onboarding/index.md` yourself.
+Follow the `deep-wiki:wiki-onboarding` skill to write the four guides and the hub in `wiki/onboarding/`. Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, giving each guide's required sections as its task. Write `wiki/onboarding/index.md` yourself. In `fill-missing` mode, dispatch only the guides that are missing, and write the hub only if it is missing.
 
 ## Step 4: Site
 
-Follow the `deep-wiki:wiki-vitepress` skill without its build step: copy the templates, fill in the placeholders, write `wiki/index.md`, and post-process every page.
+Follow the `deep-wiki:wiki-vitepress` skill without its build step: copy the templates, fill in the placeholders, write `wiki/index.md`, and post-process every page. In `fill-missing` mode, copy only the template files that are missing, write `wiki/index.md` only if it is missing, and post-process only the pages written in this run.
 
 ## Step 5: AGENTS.md
 

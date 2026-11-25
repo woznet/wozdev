@@ -84,6 +84,7 @@ Same structure as `llms.txt` but with full content inlined:
 - **Preserve citations** — all `[file:line](URL)` links stay as-is
 - **Preserve tables** — all markdown tables stay intact
 - **Preserve `<!-- Sources: -->` comments** — these provide diagram provenance
+- **Rebase relative links**. A page's relative links resolve against that page's folder, but once inlined they resolve against `wiki/llms-full.txt`. Rewrite each relative link (Markdown links and images) to the wiki-relative path of its target. For example, `../02-architecture/auth.md#tokens` in `onboarding/contributor-guide.md` becomes `./02-architecture/auth.md#tokens`. Keep anchors. Leave external URLs, absolute paths, and same-page `#anchor` links unchanged.
 
 ## Prerequisites
 
@@ -101,14 +102,16 @@ Generate these files:
 | `./llms.txt` | Root discovery file | Standard path per llms.txt spec. GitHub MCP `get_file_contents` and `search_code` find this first. |
 | `wiki/llms.txt` | Wiki-relative links | For VitePress deployment and wiki-internal navigation. |
 | `wiki/llms-full.txt` | Full inlined content | Comprehensive reference for agents needing all docs in one file. |
-| `wiki/public/llms.txt`, `wiki/public/llms-full.txt` | Deployment copies (llms.txt links rewritten to site routes) | Reachable at `/llms.txt` on the deployed wiki. |
+| `wiki/public/llms.txt`, `wiki/public/llms-full.txt` | Deployment copies (wiki links rewritten to site routes) | Reachable at `/llms.txt` on the deployed wiki. |
 
 The root `./llms.txt` links into `wiki/` (e.g., `[Guide](./wiki/onboarding/contributor-guide.md)`). The `wiki/llms.txt` uses wiki-relative paths (e.g., `[Guide](./onboarding/contributor-guide.md)`).
 
 Also write deployment copies to `wiki/public/` so the deployed site serves them at `/llms.txt` and `/llms-full.txt`. That folder is the VitePress public folder; `.vitepress/public/` is not served.
 
-- **`wiki/public/llms-full.txt`**: an exact copy of `wiki/llms-full.txt`. Its content is inlined, so no links need rewriting.
-- **`wiki/public/llms.txt`**: the same text as `wiki/llms.txt`, but every wiki link rewritten to the built site route, because the site serves HTML pages, not the `.md` sources. Read `base` (the `BASE` constant) and `cleanUrls` from `wiki/.vitepress/config.mts`. Then turn `./onboarding/contributor-guide.md` into `{base}onboarding/contributor-guide` (add `.html` when `cleanUrls` is off), and `./02-architecture/index.md` into `{base}02-architecture/`. Keep anchors (`#section`). Leave external URLs unchanged.
+The site serves HTML pages, not the `.md` sources, so both deployment copies rewrite wiki links to built site routes. Read `base` (the `BASE` constant) and `cleanUrls` from `wiki/.vitepress/config.mts`. Then turn `./onboarding/contributor-guide.md` into `{base}onboarding/contributor-guide` (add `.html` when `cleanUrls` is off), and `./02-architecture/index.md` into `{base}02-architecture/`. Keep anchors (`#section`). Leave external URLs and source-file citations unchanged.
+
+- **`wiki/public/llms.txt`**: the text of `wiki/llms.txt`, with its wiki links rewritten this way.
+- **`wiki/public/llms-full.txt`**: the text of `wiki/llms-full.txt` (whose links are already rebased to wiki-relative paths), with its wiki links rewritten the same way. Everything else stays identical.
 
 `wiki/llms.txt` and the root `./llms.txt` keep their `.md` links, for repository and agent discovery.
 
@@ -128,6 +131,7 @@ Before finalizing:
 - [ ] "Optional" section only contains truly optional content
 - [ ] `llms.txt` is concise (1-5 KB)
 - [ ] `llms-full.txt` contains all wiki pages
-- [ ] `wiki/public/llms-full.txt` matches `wiki/llms-full.txt`
-- [ ] Every link in `wiki/public/llms.txt` is a site route under `base` (no `.md` links)
+- [ ] Relative links inside `llms-full.txt` are rebased to wiki-relative paths and point at files that exist
+- [ ] `wiki/public/llms-full.txt` matches `wiki/llms-full.txt` except that its wiki links are site routes
+- [ ] Every wiki link in `wiki/public/llms.txt` and `wiki/public/llms-full.txt` is a site route under `base` (no `.md` links)
 - [ ] Every generated file carries the marker; no file without the marker was overwritten
