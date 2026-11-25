@@ -1,5 +1,5 @@
 ---
-description: Generate llms.txt and llms-full.txt (root, wiki/, and wiki/public/) following the llms.txt specification
+description: Generate llms.txt (root, wiki/, wiki/public/) and llms-full.txt (wiki/, wiki/public/) following the llms.txt specification
 ---
 
 # Deep Wiki: Generate llms.txt

@@ -45,7 +45,7 @@ Pick one of the two pipelines:
 /deep-wiki:generate
 ```
 
-- `/deep-wiki:crisp` is the fast path: 5–8 dense pages, a contributor guide, and a site scaffold, with no npm build. Use it for a first run or a small project.
+- `/deep-wiki:crisp` is the fast path: 5–7 dense pages, a contributor guide, and a site scaffold, with no npm build. Use it for a first run or a small project.
 - `/deep-wiki:generate` is the full pipeline: catalogue, pages written by parallel subagents, four onboarding guides, the VitePress site, `AGENTS.md`, `llms.txt`, and a build. Add a focus area to narrow it (`/deep-wiki:generate src/api`) or `--no-build` to skip npm.
 
 Running `generate` again on an existing `wiki/` asks whether to regenerate everything or only fill in the missing pages.
@@ -83,7 +83,7 @@ Plain requests work too: "what changed this month?" triggers the changelog skill
 | Command | Description |
 |---------|-------------|
 | `/deep-wiki:generate [focus] [--no-build]` | Full pipeline: catalogue → pages (parallel writer subagents) → onboarding → VitePress site → AGENTS.md → llms.txt |
-| `/deep-wiki:crisp [focus]` | Fast wiki: 5–8 dense pages, one onboarding guide, site scaffold, no npm build |
+| `/deep-wiki:crisp [focus]` | Fast wiki: 5–7 dense pages, one onboarding guide, site scaffold, no npm build |
 | `/deep-wiki:catalogue [focus]` | Writes only `wiki/catalogue.json` |
 | `/deep-wiki:page <topic> [files] [--crisp]` | One page with diagrams and citations |
 | `/deep-wiki:onboard [contributor\|staff\|executive\|pm]` | Onboarding guides in `wiki/onboarding/` |
@@ -94,7 +94,7 @@ Plain requests work too: "what changed this month?" triggers the changelog skill
 | `/deep-wiki:deploy` | GitHub Pages workflow (`.github/workflows/deploy-wiki.yml`) |
 | `/deep-wiki:ado [wiki-dir]` | Azure DevOps Wiki export to `wiki/dist/ado-wiki/` |
 | `/deep-wiki:agents [folders]` | `AGENTS.md` + `CLAUDE.md` where missing |
-| `/deep-wiki:llms` | `llms.txt` and `llms-full.txt` (root, `wiki/`, `wiki/public/`) |
+| `/deep-wiki:llms` | `llms.txt` (root, `wiki/`, `wiki/public/`) and `llms-full.txt` (`wiki/`, `wiki/public/`) |
 
 Commands are thin wrappers: each loads the matching skill, which holds the procedure.
 
@@ -160,7 +160,7 @@ llms.txt                   # Root discovery copy (links into wiki/)
 
 ## Checking a Wiki
 
-The scaffold copies two Node scripts into `wiki/scripts/`. Neither needs `npm install`.
+The scaffold copies two Node scripts, and the `lib.mjs` they share, into `wiki/scripts/`. Neither needs `npm install`.
 
 ```bash
 cd wiki
@@ -169,6 +169,8 @@ node scripts/check-wiki.mjs . --mode crisp  # crisp thresholds
 node scripts/check-wiki.mjs . --page 02-architecture/overview.md
 node scripts/gen-section-indexes.mjs .      # rewrite each section's index.md from catalogue.json
 ```
+
+Citations are verified against the repository that contains `wiki/`; use `--repo <path>` if the source is elsewhere, or `--no-source` to skip that. The plugin's own script tests run with `node --test "plugins/deep-wiki/tests/*.test.mjs"`.
 
 `npm run build` runs the site-affecting checks (`--site`) before `vitepress build`, and `npm run check` runs them all. Errors cover frontmatter and title length, `{{ }}` and tag-shaped text outside code, Mermaid rules, broken relative links, cited files and line ranges that do not exist, per-page diagram and citation thresholds, and catalogue pages that were never written. Warnings cover wide tables, dead `#anchor` links, pages missing from the catalogue, an `llms.txt` over 5 KB, and files left behind in the repository.
 

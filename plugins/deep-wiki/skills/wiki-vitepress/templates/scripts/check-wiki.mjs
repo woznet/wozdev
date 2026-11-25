@@ -273,9 +273,12 @@ export function checkWiki(options) {
     if (!scanned.has(rel)) scanned.set(rel, scanPage(fs.readFileSync(path.join(wikiDir, rel), 'utf8')))
     return scanned.get(rel)
   }
-  /** A page that exists, or (while pages are still being written) one the catalogue promises. */
+  // Pages every full run writes after the catalogue pages: the landing page and onboarding.
+  const LATER_PAGES = new Set(['index.md', ...['index', 'contributor-guide', 'staff-engineer-guide', 'executive-guide', 'product-manager-guide'].map((n) => `onboarding/${n}.md`)])
+  /** A page that exists, or (while pages are still being written) one the run promises. */
   const pageExists = (rel) =>
-    onDisk.has(rel) || (pageMode && (leafPaths.has(rel) || (rel.endsWith('/index.md') && sectionDirs.has(rel.slice(0, -9)))))
+    onDisk.has(rel) ||
+    (pageMode && (leafPaths.has(rel) || LATER_PAGES.has(rel) || (rel.endsWith('/index.md') && sectionDirs.has(rel.slice(0, -9)))))
 
   const kindOf = (rel) => {
     const base = path.posix.basename(rel)
@@ -391,7 +394,9 @@ export function checkWiki(options) {
           else if (!path.posix.extname(dest)) dest = pageExists(`${dest}.md`) ? `${dest}.md` : `${dest}/index.md`
           else if (dest.endsWith('.html')) dest = dest.replace(/\.html$/, '.md')
           if (dest.endsWith('.md') ? !pageExists(dest) : !fs.existsSync(path.join(wikiDir, dest)) && !fs.existsSync(path.join(wikiDir, 'public', dest))) {
-            error(rel, n, 'link', `broken link ${url} (no ${dest})`)
+            // Without a catalogue (crisp runs) a sibling may simply not be written yet.
+            const pending = pageMode && !catalogue && dest.endsWith('.md')
+            add(pending ? 'warn' : 'error', rel, n, 'link', `broken link ${url} (no ${dest})${pending ? '; fine if that page is still being written' : ''}`)
             continue
           }
         }
@@ -455,6 +460,10 @@ export function checkWiki(options) {
   if (fs.existsSync(config)) {
     const left = fs.readFileSync(config, 'utf8').match(/'__[A-Z_]+__'/g)
     if (left) error('.vitepress/config.mts', 0, 'placeholder', `unfilled placeholder(s): ${[...new Set(left)].join(', ')}`)
+  }
+  const pkg = path.join(wikiDir, 'package.json')
+  if (fs.existsSync(pkg) && fs.readFileSync(pkg, 'utf8').includes('__PACKAGE_NAME__')) {
+    error('package.json', 0, 'placeholder', 'unfilled placeholder: __PACKAGE_NAME__')
   }
 
   if (catalogue) {

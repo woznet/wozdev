@@ -4,7 +4,7 @@ description: Use when writing or regenerating one documentation page for a code 
 license: MIT
 metadata:
   author: Microsoft (forked)
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Wiki Page Writer

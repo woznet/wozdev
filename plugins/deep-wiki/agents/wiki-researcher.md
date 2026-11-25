@@ -2,6 +2,7 @@
 name: wiki-researcher
 description: Code research subagent that runs a five-iteration, evidence-first investigation of one topic in a repository and returns findings with citations and confidence ratings. Dispatch it with the research question plus REPO_URL, HOST, and BRANCH.
 model: sonnet
+color: purple
 skills:
   - deep-wiki:wiki-conventions
   - deep-wiki:wiki-researcher

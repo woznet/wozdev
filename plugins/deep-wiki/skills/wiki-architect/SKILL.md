@@ -4,7 +4,7 @@ description: Use when planning documentation for a code repository - creating a 
 license: MIT
 metadata:
   author: Microsoft (forked)
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Wiki Architect

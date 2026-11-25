@@ -67,7 +67,6 @@ for (const { node, dir } of sections) {
     '---',
     '',
     `# ${name}`,
-    '',
     MARKER,
     '',
     description,

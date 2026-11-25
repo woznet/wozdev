@@ -2,6 +2,7 @@
 name: wiki-writer
 description: Documentation writer subagent that writes one deep-wiki page (or a small batch) with dark-mode Mermaid diagrams and line-level source citations. Dispatch it with REPO_URL, HOST, BRANCH, mode, the output path, the catalogue node, and the sibling page list.
 model: sonnet
+color: green
 skills:
   - deep-wiki:wiki-conventions
   - deep-wiki:wiki-page-writer

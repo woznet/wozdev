@@ -27,15 +27,15 @@ The templates live in this skill's `templates/` folder (next to this file). Copy
 | `templates/public/logo.svg` | `wiki/public/logo.svg` |
 | `templates/scripts/*.mjs` | `wiki/scripts/` (`lib.mjs`, `check-wiki.mjs`, `gen-section-indexes.mjs`) |
 
-Then fill in the placeholders:
+Then fill in the placeholders. Each one already sits inside quotes in the template, so replace only the `__NAME__` text and keep the quotes around it:
 
 | Placeholder | File | Value |
 |-------------|------|-------|
 | `__PACKAGE_NAME__` | `package.json` | Repo name, lowercase kebab-case |
 | `__SITE_TITLE__` | `config.mts` | Project name |
 | `__SITE_DESCRIPTION__` | `config.mts` | One specific sentence about the project |
-| `__BASE__` | `config.mts` | `'/'` for a user/org Pages site (`<owner>.github.io`) or custom domain; `'/<repo-name>/'` for a GitHub project Pages site; `'/'` when not deploying |
-| `__REPO_URL__` | `config.mts` | `REPO_URL`, or `''` when `HOST` is `local` |
+| `__BASE__` | `config.mts` | `/` for a user/org Pages site (`<owner>.github.io`) or custom domain; `/<repo-name>/` for a GitHub project Pages site; `/` when not deploying |
+| `__REPO_URL__` | `config.mts` | `REPO_URL`, or nothing (an empty string) when `HOST` is `local` |
 | `__BRANCH__` | `config.mts` | `BRANCH` |
 
 `config.mts` builds the sidebar at build time: Onboarding first (expanded), then every `NN-name/` folder in order, with the first three expanded. You don't edit the sidebar by hand.

@@ -2,6 +2,7 @@
 name: wiki-architect
 description: Documentation architect subagent that scans a repository and writes the deep-wiki catalogue (wiki/catalogue.json). Dispatch it with REPO_URL, HOST, BRANCH, and the mode when planning a wiki.
 model: sonnet
+color: blue
 skills:
   - deep-wiki:wiki-conventions
   - deep-wiki:wiki-architect

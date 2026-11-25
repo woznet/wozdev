@@ -18,7 +18,7 @@ Resolve `REPO_URL`, `HOST`, and `BRANCH` once, as the conventions describe (dete
 
 If `wiki/` already has pages, ask the user whether to regenerate everything, fill only the missing pages from the catalogue, or stop. Record the answer as `MODE_WRITE` (`regenerate` or `fill-missing`). A fresh run is `regenerate`. Conventions section 8 says what each mode may replace; apply it in every step below.
 
-In `regenerate` mode, in the same question, list any existing `AGENTS.md` / `CLAUDE.md` files and any root `llms.txt` / `llms-full.txt` without the deep-wiki marker, and ask whether to replace or keep them. Tell the user that section folders and pages missing from the new catalogue will be deleted.
+In `regenerate` mode, in the same question, list any existing `AGENTS.md` / `CLAUDE.md` files and a root `llms.txt` without the deep-wiki marker, and ask whether to replace or keep them. Tell the user that section folders and pages missing from the new catalogue will be deleted.
 
 In `fill-missing` mode, never overwrite an existing output file. Before each write or dispatch, check whether the target exists and skip it if it does. Add each skipped path to the report.
 

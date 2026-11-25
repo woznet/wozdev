@@ -1,5 +1,5 @@
 ---
-description: Generate a fast, concise wiki for the current repository - 5 to 8 dense pages, one onboarding guide, and a VitePress site scaffold, with minimal tool calls and no npm build
+description: Generate a fast, concise wiki for the current repository - 5 to 7 dense pages, one onboarding guide, and a VitePress site scaffold, with minimal tool calls and no npm build
 argument-hint: "[focus area]"
 ---
 

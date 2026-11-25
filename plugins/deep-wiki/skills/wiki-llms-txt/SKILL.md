@@ -4,7 +4,7 @@ description: Use when the user wants llms.txt or llms-full.txt files, an LLM-rea
 license: MIT
 metadata:
   author: Microsoft (forked)
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # llms.txt Generator

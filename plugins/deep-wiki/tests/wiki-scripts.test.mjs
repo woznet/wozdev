@@ -1,4 +1,4 @@
-// Run with: node --test plugins/deep-wiki/tests
+// Run with: node --test "plugins/deep-wiki/tests/*.test.mjs"
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -142,6 +142,9 @@ test('broken links fail; links to unwritten catalogue pages pass in --page mode'
   assert.deepEqual(rules(run(bad)), ['link'])
   const pending = fixture({ '01-getting-started/usage.md': null })
   assert.deepEqual(run(pending, { pages: ['01-getting-started/setup.md'] }).errors, [])
+  const later = fixture({ '01-getting-started/setup.md': goodPage('Setup', 'See [Guide](../onboarding/contributor-guide.md) and [Home](../index.md).') })
+  assert.deepEqual(run(later, { pages: ['01-getting-started/setup.md'] }).errors, [])
+  assert.deepEqual(rules(run(later)), ['link', 'link'])
   assert.deepEqual(rules(run(pending)), ['link', 'catalogue-drift'])
 })
 
