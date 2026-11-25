@@ -1,0 +1,11 @@
+{
+  "name": "deep-wiki",
+  "description": "AI-powered wiki generator for code repositories: Mermaid-rich, source-cited documentation, a dark-mode VitePress site, onboarding guides, deep research, AGENTS.md and llms.txt. Local fork of microsoft/skills deep-wiki with a shared conventions skill, shipped templates, and pipeline fixes.",
+  "version": "2.1.0",
+  "author": {
+    "name": "woznet (fork); thegovind (original)"
+  },
+  "homepage": "https://github.com/woznet/wozdev/tree/main/plugins/deep-wiki",
+  "repository": "https://github.com/microsoft/skills",
+  "license": "MIT"
+}

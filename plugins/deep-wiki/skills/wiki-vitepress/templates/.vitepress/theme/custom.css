@@ -1,0 +1,278 @@
+/* deep-wiki dark theme. Palette: see the deep-wiki:wiki-conventions skill. */
+
+/* ---------- Palette and typography ---------- */
+:root,
+.dark {
+  --vp-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  --vp-c-bg: #0d1117;
+  --vp-c-bg-alt: #161b22;
+  --vp-c-bg-elv: #1c2128;
+  --vp-c-bg-soft: #161b22;
+  --vp-c-divider: #30363d;
+  --vp-c-border: #30363d;
+  --vp-c-gutter: #21262d;
+  --vp-c-text-1: #e6edf3;
+  --vp-c-text-2: #9da7b3;
+  --vp-c-text-3: #6e7681;
+  --vp-c-brand-1: #8b7dff;
+  --vp-c-brand-2: #6d5dfc;
+  --vp-c-brand-3: #5a4ae0;
+  --vp-c-brand-soft: rgba(109, 93, 252, 0.16);
+  --vp-code-block-bg: #161b22;
+  --vp-code-bg: rgba(110, 118, 129, 0.2);
+  --vp-code-color: #b8aeff;
+  --vp-sidebar-bg-color: #0d1117;
+  --vp-nav-bg-color: #0d1117;
+}
+
+/* ---------- Layout and content ---------- */
+.VPDoc .content-container {
+  max-width: 820px;
+}
+.VPNav {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+.VPSidebarItem.level-0 > .item > .text {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8em;
+}
+.VPSidebarItem.is-active > .item {
+  border-left: 2px solid var(--vp-c-brand-2);
+  padding-left: 8px;
+}
+.vp-doc a {
+  text-decoration: none;
+  border-bottom: 1px dotted var(--vp-c-brand-2);
+}
+.vp-doc blockquote {
+  border-left: 3px solid #6d5dfc;
+  background: #161b22;
+  padding: 8px 16px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ---------- Tables ---------- */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.vp-doc th {
+  background: #161b22;
+  color: var(--vp-c-text-1);
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.03em;
+}
+.vp-doc tr:nth-child(2n) {
+  background: rgba(22, 27, 34, 0.6);
+}
+.vp-doc td,
+.vp-doc th {
+  border: 1px solid var(--vp-c-divider);
+  vertical-align: top;
+}
+
+/* ---------- Mermaid containers ---------- */
+.mermaid-diagram,
+.vp-doc .mermaid {
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.mermaid-zoomable {
+  cursor: zoom-in;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mermaid-zoomable:hover {
+  border-color: #6d5dfc;
+  box-shadow: 0 0 20px rgba(109, 93, 252, 0.12);
+}
+.mermaid-zoomable:focus-visible {
+  outline: 2px solid #6d5dfc;
+  outline-offset: 2px;
+}
+.mermaid-zoomable::after {
+  content: 'Click to zoom';
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #2d333b;
+  color: #8b949e;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.mermaid-zoomable:hover::after {
+  opacity: 1;
+}
+
+/* ---------- Mermaid dark overrides ----------
+   Theme variables miss some shapes. These rules skip any element that carries an
+   inline `style` (from a Mermaid `style`/`classDef` directive), so accent colors survive. */
+.mermaid-diagram .node rect:not([style*='fill']),
+.mermaid-diagram .node circle:not([style*='fill']),
+.mermaid-diagram .node ellipse:not([style*='fill']),
+.mermaid-diagram .node polygon:not([style*='fill']),
+.mermaid-diagram .node path:not([style*='fill']),
+.mermaid-diagram .label-container:not([style*='fill']) {
+  fill: #2d333b;
+  stroke: #6d5dfc;
+}
+.mermaid-diagram .nodeLabel,
+.mermaid-diagram .edgeLabel,
+.mermaid-diagram .label {
+  color: #e6edf3;
+}
+.mermaid-diagram text:not([style*='fill']) {
+  fill: #e6edf3;
+}
+.mermaid-diagram .cluster rect:not([style*='fill']) {
+  fill: #161b22;
+  stroke: #30363d;
+}
+.mermaid-diagram .edgeLabel rect,
+.mermaid-diagram .edgeLabel p {
+  fill: #1c2333;
+  background-color: #1c2333;
+}
+.mermaid-diagram .flowchart-link,
+.mermaid-diagram .edgePath path,
+.mermaid-diagram .messageLine0,
+.mermaid-diagram .messageLine1 {
+  stroke: #8b949e;
+}
+.mermaid-diagram marker path {
+  fill: #8b949e;
+  stroke: #8b949e;
+}
+
+/* ---------- Diagram modal ---------- */
+.mermaid-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #e6edf3;
+  background: rgba(13, 17, 23, 0.97);
+}
+.mermaid-modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+.mermaid-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+.mermaid-modal-controls {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+}
+.mermaid-modal-controls button {
+  padding: 4px 12px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #2d333b;
+  color: #e6edf3;
+  font-size: 14px;
+  cursor: pointer;
+}
+.mermaid-modal-controls button:hover,
+.mermaid-modal-controls button:focus-visible {
+  border-color: #6d5dfc;
+}
+.mermaid-modal-controls [data-action='close'] {
+  margin-left: auto;
+}
+.mermaid-modal-viewport {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+.mermaid-modal-viewport.is-panning {
+  cursor: grabbing;
+}
+.mermaid-modal-stage {
+  width: 90%;
+  transform-origin: center center;
+}
+.mermaid-modal-stage svg {
+  width: 100%;
+  height: auto;
+}
+
+/* ---------- Image zoom ---------- */
+.medium-zoom-overlay {
+  z-index: 999;
+  backdrop-filter: blur(4px);
+}
+.medium-zoom-image--opened {
+  z-index: 1000;
+}
+.vp-doc img {
+  cursor: zoom-in;
+  border-radius: 6px;
+}
+
+/* ---------- Focus mode ---------- */
+.focus-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #e6edf3;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.focus-toggle:hover,
+.focus-toggle:focus-visible {
+  border-color: #6d5dfc;
+}
+html.focus-mode .VPSidebar,
+html.focus-mode .VPDocAside,
+html.focus-mode .aside {
+  display: none !important;
+}
+html.focus-mode .VPContent.has-sidebar {
+  padding-left: 0 !important;
+}
+html.focus-mode .VPDoc .container,
+html.focus-mode .VPDoc .content,
+html.focus-mode .VPDoc .content-container {
+  max-width: 1000px !important;
+  margin: 0 auto;
+}

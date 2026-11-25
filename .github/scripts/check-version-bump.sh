@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fail when skills/ changed but .claude-plugin/plugin.json version was not strictly increased.
+# Fail when a plugin's components changed but its plugin.json version was not strictly increased.
+# Components are plugins/<name>/{skills,agents,commands,hooks}/; the manifest is
+# plugins/<name>/.claude-plugin/plugin.json. A plugin with no manifest at the base is new and skipped.
 #   check-version-bump.sh <base-ref>   compare <base-ref> to HEAD (CI)
 #   check-version-bump.sh --staged     compare HEAD to the index (pre-commit)
 set -euo pipefail
-
-manifest='.claude-plugin/plugin.json'
 
 if [ $# -ne 1 ]; then
   echo "usage: $0 <base-ref> | --staged" >&2
@@ -28,27 +28,38 @@ else
   new_rev='HEAD'
 fi
 
-if ! grep -q '^skills/' <<<"$changed"; then
-  exit 0
-fi
+plugins=$(sed -nE 's#^plugins/([^/]+)/(skills|agents|commands|hooks)/.*#\1#p' <<<"$changed" | sort -u)
 
-if ! git cat-file -e "$old_rev:$manifest" 2>/dev/null; then
-  exit 0
-fi
+status=0
 
-old=$(git show "$old_rev:$manifest" | jq -r '.version')
-new=$(git show "$new_rev:$manifest" | jq -r '.version')
+for plugin in $plugins; do
+  manifest="plugins/$plugin/.claude-plugin/plugin.json"
 
-if ! grep -Eq '^[0-9]+(\.[0-9]+)*$' <<<"$new"; then
-  echo "check-version-bump: version '$new' in $manifest is missing or not numeric (expected e.g. 1.2.3)." >&2
-  exit 1
-fi
+  if ! git cat-file -e "$old_rev:$manifest" 2>/dev/null; then
+    continue
+  fi
 
-highest=$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)
+  if ! git cat-file -e "$new_rev:$manifest" 2>/dev/null; then
+    echo "check-version-bump: $plugin: $manifest is missing." >&2
+    status=1
+    continue
+  fi
 
-if [ "$new" = "$old" ] || [ "$highest" != "$new" ]; then
-  echo "check-version-bump: skills/ changed but version not bumped ($old -> $new) in $manifest." >&2
-  exit 1
-fi
+  old=$(git show "$old_rev:$manifest" | jq -r '.version')
+  new=$(git show "$new_rev:$manifest" | jq -r '.version')
 
-exit 0
+  if ! grep -Eq '^[0-9]+(\.[0-9]+)*$' <<<"$new"; then
+    echo "check-version-bump: $plugin: version '$new' in $manifest is missing or not numeric (expected e.g. 1.2.3)." >&2
+    status=1
+    continue
+  fi
+
+  highest=$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)
+
+  if [ "$new" = "$old" ] || [ "$highest" != "$new" ]; then
+    echo "check-version-bump: $plugin: components changed but version not bumped ($old -> $new) in $manifest." >&2
+    status=1
+  fi
+done
+
+exit "$status"

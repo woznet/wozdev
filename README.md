@@ -1,54 +1,41 @@
 # WozDev
 
-Woz's AI development toolkit for Claude Code: skills, and in time agents and hooks, that make Claude write and check work to a consistent house style.
+Woz's Claude Code plugin marketplace. Add it once, then install whichever plugins you want.
 
-## What It Does
+## Plugins
 
-Each skill loads automatically when Claude works on the kind of file or task it covers. Every skill carries its own rules, references, and a checker or meter, so the result is measured rather than eyeballed.
-
-## Skills
-
-| Skill                | Triggers on                                                                                                     | Validates with                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `writing-markdown`   | Writing or fixing READMEs, docs, changelogs, or any `.md` / `.markdown` file                                    | `rumdl check --no-cache --fix`                                                      |
-| `writing-powershell` | Any PowerShell work - `.ps1` / `.psm1` / `.psd1` files, one-liners, Pester, Windows and M365 admin              | `scripts/Test-PowerShellStyle.ps1` (PSScriptAnalyzer plus custom `Measure-*` rules) |
-| `optimize-prompt`    | Writing, tightening, or restructuring prompts - system prompts, agent briefs, `SKILL.md`, `CLAUDE.md`, templates | `scripts/Measure-Prompt.ps1` or `scripts/measure-prompt.sh` (estimated tokens before/after, filler and emphasis) |
-| `orchestrate-subagents` | Planning or running a large task as batches of sub-agent work; writes `docs/woz-docs/spec-dev/<slug>/PLAN.md` (and `EXECUTE.md` in plan-only mode) | `scripts/Test-OrchestrationPlan.ps1` or `scripts/test-orchestration-plan.sh` (sections, batch fields, dependency cycles, write-key conflicts) |
-| `write-build-doc` | Turning rough notes, requirements, or implementation options into a build doc for a coding agent; writes `docs/woz-docs/spec-dev/<slug>/BUILD.md` | `rumdl check --no-cache` (via `writing-markdown`) |
-| `write-spec` | Turning rough notes or a feature or skill idea into a PRD and technical spec, asking only blocking questions; writes `docs/woz-docs/spec-dev/<slug>/PRD.md` and `SPEC.md` | `rumdl check --no-cache` (via `writing-markdown`) |
-
-Inside Claude Code the skills are namespaced as `wozdev:writing-markdown`, `wozdev:writing-powershell`, `wozdev:optimize-prompt`, `wozdev:orchestrate-subagents`, `wozdev:write-build-doc`, and `wozdev:write-spec`.
+| Plugin                               | What it does                                                                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`wozdev`](plugins/wozdev/README.md)       | House-style skills with bundled checkers for Markdown and PowerShell, a prompt optimizer, a sub-agent orchestrator, a build doc writer, and a PRD and spec writer                                  |
+| [`deep-wiki`](plugins/deep-wiki/README.md) | Generates Mermaid-rich, source-cited wikis for code repositories: a dark-mode VitePress site, onboarding guides, deep research, `AGENTS.md`, and `llms.txt` (fork of microsoft/skills deep-wiki) |
 
 ## Installation
 
-In Claude Code, add this repository as a plugin marketplace, then install the plugin:
+In Claude Code, add this repository as a plugin marketplace:
 
 ```text
 /plugin marketplace add woznet/wozdev
-/plugin install wozdev@wozdev
 ```
 
-To try the plugin without installing it, clone the repository and point Claude Code at it:
+Then install one or both plugins:
+
+```text
+/plugin install wozdev@wozdev
+/plugin install deep-wiki@wozdev
+```
+
+Running `/plugin` with no arguments also lists the marketplace's plugins so you can pick from them.
+
+To try a plugin without installing it, clone the repository and point Claude Code at the plugin's folder:
 
 ```bash
 git clone https://github.com/woznet/wozdev.git
-claude --plugin-dir wozdev
+claude --plugin-dir wozdev/plugins/wozdev
 ```
-
-## Prerequisites
-
-- **rumdl** for the Markdown skill. If it is missing, the skill installs the GitHub release binary on 64-bit Windows or Linux with its bundled `Install-Rumdl.ps1` or `install-rumdl.sh`.
-- **PowerShell 7 (`pwsh`)** and the **PSScriptAnalyzer** module for the PowerShell checker. The skill's `references/installing-powershell.md` covers bootstrapping both, plus Pester.
-- **PowerShell 7 (`pwsh`), Windows PowerShell 5.1, or bash with GNU grep and awk** for the prompt meter. It needs no modules; the bash version covers hosts without PowerShell.
-- **PowerShell 7 (`pwsh`), Windows PowerShell 5.1, or bash with awk** for the plan checker. It needs no modules.
-
-## Usage
-
-Once installed, ask Claude to work with Markdown, PowerShell, prompts, multi-agent plans, build docs, or specs as usual - for example "write a README for this module", "write a function that exports disabled AD users to CSV", "tighten this system prompt", "plan this migration as sub-agent batches, but don't run anything yet", "turn these notes into a build doc", or "write a PRD and spec for this feature idea." The right skill loads on its own, and Claude runs its checker before handing the file back. To call a skill directly, type its name as a slash command, such as `/wozdev:optimize-prompt`.
 
 ## Updating
 
-Claude Code caches each installed plugin by the `version` in `.claude-plugin/plugin.json` and replaces the cached copy only when that version changes, so every release bumps it. To pick up a release, refresh the marketplace, update the plugin, then restart Claude Code:
+Claude Code caches each installed plugin by the `version` in its `plugins/<name>/.claude-plugin/plugin.json` and replaces the cached copy only when that version changes. To pick up a release, refresh the marketplace, update the plugin, then restart Claude Code:
 
 ```bash
 claude plugin marketplace update wozdev
@@ -58,13 +45,25 @@ claude plugin marketplace update wozdev
 claude plugin update wozdev@wozdev
 ```
 
-If the update reports that wozdev is already at the latest version, the release did not change `version`, and the cached copy stays as it was.
+Use `deep-wiki@wozdev` in place of `wozdev@wozdev` to update deep-wiki.
+
+## Repository Layout
+
+```text
+.claude-plugin/marketplace.json   # Marketplace catalogue: one entry per plugin
+plugins/
+├── wozdev/                       # .claude-plugin/plugin.json, skills/
+└── deep-wiki/                    # .claude-plugin/plugin.json, agents/, commands/, skills/
+.github/                          # Version-bump check (CI workflow, pre-commit hook)
+```
+
+To add a plugin, create `plugins/<name>/` with its own `.claude-plugin/plugin.json`, then add an entry with `"source": "./plugins/<name>"` to `.claude-plugin/marketplace.json`.
 
 ## Contributing
 
-The skills are developed in a separate workspace and synced into this repository, which bumps the patch number of `version` in `.claude-plugin/plugin.json` on each release. Issues and pull requests are welcome; accepted changes are ported back to the source so the next sync keeps them.
+Issues and pull requests are welcome.
 
-Any change under `skills/` must raise `version` in `.claude-plugin/plugin.json`. A CI check enforces this on pull requests and pushes to `main`. For the same check before each commit, run `git config core.hooksPath .github/hooks` once after cloning. In an emergency, `git commit --no-verify` bypasses the hook, but CI still checks.
+Any change under a plugin's `skills/`, `agents/`, `commands/`, or `hooks/` folder must raise `version` in that plugin's `.claude-plugin/plugin.json`. A CI check enforces this on pull requests and pushes to `main`. For the same check before each commit, run `git config core.hooksPath .github/hooks` once after cloning. In an emergency, `git commit --no-verify` bypasses the hook, but CI still checks.
 
 ## License
 
