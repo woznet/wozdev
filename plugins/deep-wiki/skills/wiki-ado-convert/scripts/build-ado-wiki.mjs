@@ -221,9 +221,11 @@ async function main() {
     const raw = (await readFile(file, 'utf8')).replace(/\r\n/g, '\n')
     let [body, hadFm, fm] = stripFrontMatter(raw)
     if (hadFm) stats.frontMatter++
+    // Links first: containers prefix fenced examples with `>`, which would hide
+    // those fences from convertLinks and let it rewrite code samples.
+    body = convertLinks(body, file, src, stats)
     body = convertMermaid(body, stats)
     body = convertContainers(body, stats)
-    body = convertLinks(body, file, src, stats)
     const rel = relative(src, file)
     const fmTitle = fm.match(/^title:\s*(.+)$/m)?.[1].trim().replace(/^['"]|['"]$/g, '')
     const h1 = body.match(/^#\s+(.+)$/m)?.[1].trim()

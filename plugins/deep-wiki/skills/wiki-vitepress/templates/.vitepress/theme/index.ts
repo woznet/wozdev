@@ -111,6 +111,21 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
     if (e.key === '+' || e.key === '=') zoom(1.25)
     if (e.key === '-') zoom(1 / 1.25)
     if (e.key === '0') reset()
+    // Keyboard panning: the viewport hides overflow, so arrows reach the rest of a zoomed diagram.
+    const PAN_STEP = 40
+    const pan: Record<string, [number, number]> = {
+      ArrowLeft: [PAN_STEP, 0],
+      ArrowRight: [-PAN_STEP, 0],
+      ArrowUp: [0, PAN_STEP],
+      ArrowDown: [0, -PAN_STEP],
+    }
+    const step = pan[e.key]
+    if (step) {
+      e.preventDefault()
+      x += step[0]
+      y += step[1]
+      apply()
+    }
   })
   // Escape closes a modal <dialog> natively. Removing the element drops every listener above.
   dialog.addEventListener('close', () => {

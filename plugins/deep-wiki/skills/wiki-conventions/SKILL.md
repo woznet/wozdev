@@ -17,7 +17,7 @@ Resolve these values once per run and pass them to every subagent you dispatch:
 
 | Value | How to resolve |
 |-------|----------------|
-| `REPO_URL` | `git remote get-url origin`. Normalize: `git@host:org/repo(.git)` → `https://host/org/repo`; strip a trailing `.git`; strip credentials (`https://user@host/...` → `https://host/...`). |
+| `REPO_URL` | `git remote get-url origin`. Normalize Azure DevOps SSH remotes first: `git@ssh.dev.azure.com:v3/<org>/<project>/<repo>` → `https://dev.azure.com/<org>/<project>/_git/<repo>`, and `<org>@vs-ssh.visualstudio.com:v3/<org>/<project>/<repo>` → `https://<org>.visualstudio.com/<project>/_git/<repo>`. Then the generic SSH form: `git@host:org/repo(.git)` → `https://host/org/repo`; strip a trailing `.git`; strip credentials (`https://user@host/...` → `https://host/...`). |
 | `HOST` | `github`, `gitlab`, `azure-devops` (`dev.azure.com` or `*.visualstudio.com`), or `local` when there is no remote. |
 | `BRANCH` | Default branch: `git symbolic-ref --short refs/remotes/origin/HEAD` (strip the `origin/` prefix). Fall back to `git rev-parse --abbrev-ref HEAD`. |
 
