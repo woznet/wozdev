@@ -1,6 +1,6 @@
 ---
 name: write-build-doc
-description: 'Turns rough notes - a goal, a loose checklist, and implementation options or components - into a concise Markdown build document a coding agent can follow, saved as docs/woz-docs/spec-dev/<slug>/BUILD.md. Use when asked to write, generate, or draft a build doc, build plan, or build spec, or to turn notes, requirements, a SPEC.md, or architectural options into something a coding agent can implement. Not for PRDs or specs (use write-spec), for multi-agent execution plans (use orchestrate-subagents), for writing a prompt (use optimize-prompt), or for general documentation.'
+description: 'Turns rough notes - a goal, a loose checklist, and implementation options or components - into a concise Markdown build document a coding agent can follow, saved as a BUILD.md under docs/woz-docs/spec-dev/. Use when asked to write, generate, or draft a build doc, build plan, or build spec, or to turn notes, requirements, a SPEC.md, or architectural options into something a coding agent can implement. Not for PRDs or specs (use write-spec), for multi-agent execution plans (use orchestrate-subagents), for writing a prompt (use optimize-prompt), or for general documentation.'
 ---
 
 # Write Build Doc
