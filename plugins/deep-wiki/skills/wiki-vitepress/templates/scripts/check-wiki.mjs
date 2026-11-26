@@ -40,7 +40,6 @@ import {
   inlineLinks,
   isMarked,
   linkDefinition,
-  linkReferences,
   pagePathProblem,
   listPages,
   loadCatalogue,
@@ -831,12 +830,11 @@ export function checkWiki(options) {
       checkLink(n, url, isImage)
     }
     // Inline links, and reference-style links through their "[ref]: target" definition (lib.mjs).
-    // A definition nothing refers to renders nothing and records no link, so only used ones are checked.
-    const referenced = new Set(page.prose.flatMap(({ text }) => linkReferences(text)))
+    // Every definition is checked, used or not: deciding "used" reliably needs a full Markdown parser.
     for (const { n, text } of page.prose) {
       for (const link of inlineLinks(text)) handleUrl(n, link.url, link.label, link.isImage)
       const def = linkDefinition(text)
-      if (def && referenced.has(def.label)) handleUrl(n, def.url, def.label, false)
+      if (def) handleUrl(n, def.url, def.label, false)
     }
 
     function checkLink(n, url, isImage) {
@@ -1037,12 +1035,11 @@ export function checkWiki(options) {
         const shown = `${absent.slice(0, 5).join(', ')}${absent.length > 5 ? ', …' : ''}`
         error(label, 0, 'llms', `${absent.length} page(s) have no <doc> block (${shown}); run \`node wiki/scripts/gen-llms.mjs wiki\``)
       }
-      // Same links gen-llms rewrites: inline ones, and "[ref]: target" definitions something refers to.
+      // Same links gen-llms rewrites: inline ones and "[ref]: target" definitions.
       const fullProse = scanPage(text).prose
-      const fullRefs = new Set(fullProse.flatMap(({ text: line }) => linkReferences(line)))
       for (const { n, text: line } of fullProse) {
         const def = linkDefinition(line)
-        const defUrls = def && fullRefs.has(def.label) ? [def.url] : []
+        const defUrls = def ? [def.url] : []
         for (const url of [...inlineLinks(line).map((l) => l.url), ...defUrls]) {
           if (label.startsWith('public/')) {
             const problem = routeProblem(url)

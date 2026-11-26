@@ -218,7 +218,7 @@ test('llms-full rebases reference definitions and titled links like plain links'
     '',
     '[flow]: ./beta.md#usage',
     '[home]: ../index.md "Home"',
-    '[Note]: unused',
+    '[Note]: this is prose',
     '',
   ].join('\n')
   const dir = repo(t, files)
@@ -228,13 +228,13 @@ test('llms-full rebases reference definitions and titled links like plain links'
   const full = read(wiki, 'llms-full.txt')
   assert.match(full, /^\[flow\]: \.\/01-core\/beta\.md#usage$/m)
   assert.match(full, /^\[home\]: \.\/index\.md "Home"$/m)
-  assert.match(full, /^\[Note\]: unused$/m)
+  assert.match(full, /^\[Note\]: this is prose$/m)
   assert.match(full, /\[quoted\]\(\.\/01-core\/beta\.md 'Beta'\)/)
   assert.match(full, /\[paren\]\(<\.\/01-core\/beta\.md> \(Beta\)\)/)
   const site = read(wiki, 'public/llms-full.txt')
   assert.match(site, /^\[flow\]: \/repo\/01-core\/beta#usage$/m)
   assert.match(site, /^\[home\]: \/repo\/ "Home"$/m)
-  assert.match(site, /^\[Note\]: unused$/m)
+  assert.match(site, /^\[Note\]: this is prose$/m)
   assert.match(site, /\[quoted\]\(\/repo\/01-core\/beta 'Beta'\)/)
   assert.match(site, /\[paren\]\(<\/repo\/01-core\/beta> \(Beta\)\)/)
   assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })), [])

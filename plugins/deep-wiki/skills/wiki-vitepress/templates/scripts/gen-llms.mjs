@@ -45,7 +45,6 @@ import {
   resolveSite,
   inlineLinks,
   linkDefinition,
-  linkReferences,
 } from './lib.mjs'
 
 const MAX_BYTES = 5 * 1024
@@ -365,14 +364,12 @@ export function genLlms(options) {
     return hostLink(inRepo(plain))
   }
   /** Rewrite the links of one line. Code spans are masked for matching, so a link whose label holds code is still found. */
-  const rebaseLine = (line, pageRel, variant, referenced) => {
+  const rebaseLine = (line, pageRel, variant) => {
     const masked = line.replace(INLINE_CODE, (m) => ' '.repeat(m.length))
     let out = ''
     let last = 0
-    // A "[ref]: target" definition that the page uses is rewritten like a link; one whose target cannot be
-    // linked is dropped. An unused one ("[Note]: text") is ordinary text to the reader and stays as it is.
+    // A "[ref]: target" definition is rewritten like a link; one whose target cannot be linked is dropped.
     const def = linkDefinition(masked)
-    if (def && !referenced.has(def.label)) return line
     if (def) {
       const next = rewrite(def.url, pageRel, variant)
       if (next === null) return ''
@@ -395,9 +392,7 @@ export function genLlms(options) {
   }
   const rebase = (body, pageRel, variant) => {
     const lines = [...bodyLines(body)]
-    const mask = (line) => line.replace(INLINE_CODE, (m) => ' '.repeat(m.length))
-    const referenced = new Set(lines.flatMap(({ line, code }) => (code ? [] : linkReferences(mask(line)))))
-    return lines.map(({ line, code }) => (code ? line : rebaseLine(line, pageRel, variant, referenced))).join('\n')
+    return lines.map(({ line, code }) => (code ? line : rebaseLine(line, pageRel, variant))).join('\n')
   }
   const renderFull = (variant) => {
     const lines = [...header]

@@ -1032,7 +1032,7 @@ test('a line that only looks like a link definition is prose', (t) => {
   assert.deepEqual(run(fixture(t, usage(prose)), { site: true }).errors, [])
 })
 
-test('reference definitions are checked when used, with any title form', (t) => {
+test('reference definitions are checked, used or not, with any title form', (t) => {
   // Used: full, collapsed, and shortcut references; titles in double quotes, single quotes, and parentheses.
   const used = [
     'See [Setup][s], [Home][], and [usage].',
@@ -1043,11 +1043,11 @@ test('reference definitions are checked when used, with any title form', (t) => 
     '[unused]: ./never.md',
   ].join('\n')
   const result = run(fixture(t, usage(used)))
-  assert.deepEqual(rules(result), ['link', 'link', 'link'])
+  assert.deepEqual(rules(result), ['link', 'link', 'link', 'link'])
   assert.match(messages(result), /nope\.md/)
   assert.match(messages(result), /gone\.md/)
   assert.match(messages(result), /missing\.md/)
-  assert.doesNotMatch(messages(result), /never\.md/)
+  assert.match(messages(result), /never\.md/)
   const ok = ['See [Setup][s] and [the same page](./setup.md \'Setup\') or [again](./setup.md (Setup)).', '', '[s]: ./setup.md "Setup"'].join('\n')
   assert.deepEqual(run(fixture(t, usage(ok))).errors, [])
 })

@@ -448,11 +448,3 @@ export function linkDefinition(line) {
   const group = m[2] !== undefined ? 2 : 3
   return { label: linkLabel(m[1]), url: m[group], urlSpan: m.indices[group] }
 }
-
-/** Labels this line refers to: `[text][label]`, `[label][]`, and the shortcut `[label]`. */
-export function linkReferences(line) {
-  const out = []
-  for (const m of line.matchAll(/\[((?:[^[\]]|\[[^[\]]*\])*)\]\[([^\]\n]*)\]/g)) out.push(linkLabel(m[2] || m[1]))
-  for (const m of line.matchAll(/\[([^[\]\n]+)\](?![[(:])/g)) out.push(linkLabel(m[1]))
-  return out
-}
