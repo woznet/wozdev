@@ -4,10 +4,14 @@ Woz's Claude Code plugin marketplace. Add it once, then install whichever plugin
 
 ## Plugins
 
-| Plugin                               | What it does                                                                                                                                                                                       |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`wozdev`](plugins/wozdev/README.md)       | House-style skills with bundled checkers for Markdown and PowerShell, a prompt optimizer, a sub-agent orchestrator, a build doc writer, and a PRD and spec writer                                  |
-| [`deep-wiki`](plugins/deep-wiki/README.md) | Generates Mermaid-rich, source-cited wikis for code repositories: a dark-mode VitePress site, onboarding guides, deep research, `AGENTS.md`, and `llms.txt` (fork of microsoft/skills deep-wiki) |
+<!-- rumdl-disable MD033 -->
+
+|                                                                                                                                        | Plugin                                     | What it does                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <img src="plugins/wozdev/.claude-plugin/icon.png" alt="wozdev icon: a prompt chevron fanning out to three sub-agent nodes" width="48"> | [`wozdev`](plugins/wozdev/README.md)       | House-style skills with bundled checkers for Markdown and PowerShell, a prompt optimizer, a sub-agent orchestrator, a build doc writer, and a PRD and spec writer                                |
+| <img src="plugins/deep-wiki/.claude-plugin/icon.png" alt="deep-wiki icon: a wiki page with a diagram and text lines" width="48">       | [`deep-wiki`](plugins/deep-wiki/README.md) | Generates Mermaid-rich, source-cited wikis for code repositories: a dark-mode VitePress site, onboarding guides, deep research, `AGENTS.md`, and `llms.txt` (fork of microsoft/skills deep-wiki) |
+
+<!-- rumdl-enable MD033 -->
 
 ## Installation
 
