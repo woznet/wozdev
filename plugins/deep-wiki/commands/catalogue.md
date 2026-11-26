@@ -9,12 +9,12 @@ Load `deep-wiki:wiki-conventions`, then `deep-wiki:wiki-architect`, and follow t
 
 Running this command is a request to write the catalogue. If one exists, tell the user it will be replaced (or, with a focus, updated for that focus only) before you write it.
 
-If `wiki/scripts/check-wiki.mjs` is missing, load `deep-wiki:wiki-vitepress` and run its `init-wiki.mjs --scripts-only` command first, so the catalogue can be validated.
+If `wiki/scripts/check-wiki.mjs` is missing, load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10 with depth `full` first, so the catalogue can be validated.
 
 Finish by showing the `Section | Pages | Key files` table and suggesting `/deep-wiki:generate` (choose "fill missing" there to keep this catalogue).
 
 ## Arguments
 
-Optional focus (for example "only the pwsh app" or "max 10 pages"), applied as the architect skill describes.
+Optional. A focus is a subsystem or folder ("only the pwsh app"); a constraint shapes the whole catalogue ("at most 10 pages"). Both are applied as the architect skill describes.
 
 $ARGUMENTS

@@ -61,8 +61,10 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-/* A marker beside the active item, drawn outside the text so the label does not shift. */
-.VPSidebarItem.is-active > .item::before {
+/* A marker beside the active item, drawn outside the text so the label does not shift.
+   Levels 0 and 1 only: from level 2 down the default theme draws its own indicator. */
+.VPSidebarItem.level-0.is-active > .item::before,
+.VPSidebarItem.level-1.is-active > .item::before {
   content: '';
   position: absolute;
   top: 6px;
@@ -289,7 +291,12 @@
   border-color: #6d5dfc;
 }
 /* Desktop only. Below 960px the sidebar is already a drawer behind the menu button, and
-   hiding it here would leave that button opening nothing. */
+   hiding it here would leave that button opening nothing: there the toggle is not shown. */
+@media (max-width: 959px) {
+  .focus-toggle {
+    display: none;
+  }
+}
 @media (min-width: 960px) {
   body.focus-mode .VPSidebar,
   body.focus-mode .VPDoc .aside {

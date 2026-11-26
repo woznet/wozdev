@@ -3,106 +3,116 @@
 //   <dir>/index.md         for every section in catalogue.json
 //   onboarding/index.md    listing the onboarding guides that exist
 //
-// Usage: node scripts/gen-section-indexes.mjs [wikiDir] [--force] [--prune]
+// Usage: node wiki/scripts/gen-section-indexes.mjs [wikiDir] [--force] [--prune]
 //   --force  also replace an index.md that lacks the deep-wiki marker
 //   --prune  delete a marked section index.md whose folder is no longer a catalogue section
 // A wiki without catalogue.json (crisp) gets the onboarding hub only.
-// Exit code 0 on success, 2 when the wiki folder or the catalogue cannot be read.
+// Nothing is written when the catalogue is unusable: it must be valid JSON, hold at least one
+// section, and name only folders inside the wiki.
+// Exit code 0 on success, 2 on a usage or I/O error.
 import fs from 'node:fs'
 import path from 'node:path'
-import { MARKER, ONBOARDING_ORDER, loadCatalogue, parseFrontmatter, readText, resolveDir, walkCatalogue, yamlString } from './lib.mjs'
+import { fileURLToPath } from 'node:url'
+import { MARKER, ONBOARDING_ORDER, SKIP_FILES, isMarked, loadCatalogue, parseFrontmatter, readText, relativeInside, resolveDir, sectionDirProblem, walkCatalogue, yamlString } from './lib.mjs'
 
-const args = process.argv.slice(2)
-const unknown = args.find((a) => a.startsWith('--') && !['--force', '--prune'].includes(a))
-if (unknown) fail(`Unknown option ${unknown}`)
-const force = args.includes('--force')
-const prune = args.includes('--prune')
-const wikiDir = path.resolve(args.find((a) => !a.startsWith('--')) ?? '.')
-if (!fs.existsSync(wikiDir) || !fs.statSync(wikiDir).isDirectory()) fail(`Not a folder: ${wikiDir}`)
+export class UsageError extends Error {}
 
-let catalogue = null
-try {
-  catalogue = loadCatalogue(wikiDir)
-} catch (e) {
-  fail(`catalogue.json is not valid JSON: ${e.message}`)
-}
+const INLINE_CODE = /(`+)(?:(?!\1).)+\1/g
 
-function fail(message) {
-  console.error(message)
-  process.exit(2)
-}
-
-// ---------------------------------------------------------------------------
-// Text that came from frontmatter or the catalogue and now lands in page prose
-// ---------------------------------------------------------------------------
-/**
- * Frontmatter is not prose, so `Repository<T>` or `{{ value }}` is legal there. In a page body
- * Vue reads the first as a tag and evaluates the second, and the build fails. Text already in
- * backticks is left alone; elsewhere `{{ … }}` is put in backticks and `<` becomes `&lt;`.
- */
-function prose(text) {
-  const clean = String(text ?? '').replace(/\r?\n/g, ' ').trim()
-  const safe = (part) =>
-    part
-      .replace(/\{\{.*?\}\}|\{\{|\}\}/g, (m) => `\`${m}\``)
-      .replace(/</g, '&lt;')
+/** Apply `safe` to the text outside code spans; code spans are copied through unchanged. */
+function outsideCode(text, safe) {
   let out = ''
   let last = 0
-  for (const m of clean.matchAll(/(`+)(?:(?!\1).)+\1/g)) {
-    out += safe(clean.slice(last, m.index)) + m[0]
+  for (const m of text.matchAll(INLINE_CODE)) {
+    out += safe(text.slice(last, m.index)) + m[0]
     last = m.index + m[0].length
   }
-  return out + safe(clean.slice(last))
+  return out + safe(text.slice(last))
 }
-/** Prose inside a table cell: a bare pipe would end the cell. */
+
+/**
+ * Text from frontmatter or the catalogue that now lands in page prose. The checker rejects tag
+ * shapes and `{{ }}` in both places, but a page that has not been fixed yet must not break the
+ * hub that lists it: outside backticks `{{ … }}` is put in backticks and `<` becomes `&lt;`.
+ */
+const prose = (text) =>
+  outsideCode(String(text ?? '').replace(/\r?\n/g, ' ').trim(), (part) => part.replace(/\{\{.*?\}\}|\{\{|\}\}/g, (m) => `\`${m}\``).replace(/</g, '&lt;'))
+/** Prose inside a table cell: a bare pipe would end the cell, in or out of a code span. */
 const cell = (text) => prose(text).replace(/\|/g, '\\|')
-/** Prose used as link text: brackets would end the link. */
-const linkText = (text) => cell(text).replace(/[[\]]/g, '\\$&')
+/** Prose used as link text: a bracket outside a code span would end the link. */
+const linkText = (text) => outsideCode(cell(text), (part) => part.replace(/[[\]]/g, '\\$&'))
 
 const relLink = (fromDir, target) => {
   const rel = path.posix.relative(fromDir, target)
   return rel.startsWith('.') ? rel : `./${rel}`
 }
 
-function frontmatterOf(relPath) {
-  const file = path.join(wikiDir, relPath)
-  return fs.existsSync(file) ? (parseFrontmatter(readText(file)).data ?? {}) : {}
-}
-
-// ---------------------------------------------------------------------------
-// Writing
-// ---------------------------------------------------------------------------
-const written = []
-const skipped = []
-const removed = []
-
-const isMarked = (file) => readText(file).includes(MARKER)
-
-/** Write one generated hub page, unless a hand-written one is in the way. */
-function writeHub(target, title, description, header, rows) {
-  const file = path.join(wikiDir, target)
-  if (fs.existsSync(file) && !force && !isMarked(file)) {
-    skipped.push(target)
-    return
+function parseArgs(argv) {
+  const opts = { force: false, prune: false }
+  for (const a of argv) {
+    if (a === '--force') opts.force = true
+    else if (a === '--prune') opts.prune = true
+    else if (a.startsWith('--')) throw new UsageError(`Unknown option ${a}`)
+    else if (opts.wikiDir === undefined) opts.wikiDir = a
+    else throw new UsageError(`Unexpected argument ${a} (the wiki folder is already ${opts.wikiDir})`)
   }
-  const lines = ['---', `title: ${yamlString(title)}`, `description: ${yamlString(description)}`, '---', '', `# ${prose(title)}`, MARKER, '', prose(description), '']
-  if (rows.length) lines.push(`| ${header.join(' | ')} |`, `|${header.map(() => '------').join('|')}|`, ...rows, '')
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, lines.join('\n'))
-  written.push(target)
+  return opts
 }
 
-// ---- section indexes --------------------------------------------------------
-const sectionDirs = new Set()
-if (catalogue) {
+export function genIndexes(options) {
+  const { force = false, prune = false } = options
+  const wikiDir = path.resolve(options.wikiDir ?? '.')
+  if (!fs.existsSync(wikiDir) || !fs.statSync(wikiDir).isDirectory()) throw new UsageError(`Not a folder: ${wikiDir}`)
+
+  let catalogue = null
+  try {
+    catalogue = loadCatalogue(wikiDir)
+  } catch (e) {
+    throw new UsageError(`catalogue.json is not valid JSON: ${e.message}`)
+  }
+
+  // ---- validate before writing or deleting anything ----------------------------
   const sections = []
-  walkCatalogue(catalogue.items, (node, ctx) => {
-    if (ctx.dir) {
+  const sectionDirs = new Set()
+  if (catalogue) {
+    walkCatalogue(catalogue?.items, (node, ctx) => {
+      if (!ctx.dir) return
+      const problem = sectionDirProblem(ctx.dir)
+      // The folder must be inside the wiki: a `dir` with ".." would write an index.md somewhere else.
+      if (problem || relativeInside(wikiDir, path.resolve(wikiDir, ctx.dir)) === null) {
+        throw new UsageError(`catalogue.json: section dir "${node.dir}" ${problem ?? 'must stay inside the wiki'}; nothing was written`)
+      }
       sections.push({ node, dir: ctx.dir })
       sectionDirs.add(ctx.dir)
-    }
-  })
+    })
+    // With no sections, --prune would read every generated index as stale and delete it.
+    if (!sections.length) throw new UsageError('catalogue.json has no sections (an `items` array of nodes with a `dir`); nothing was written')
+  }
 
+  const written = []
+  const skipped = []
+  const removed = []
+  const messages = []
+  const frontmatterOf = (relPath) => {
+    const file = path.join(wikiDir, relPath)
+    return fs.existsSync(file) && fs.statSync(file).isFile() ? (parseFrontmatter(readText(file)).data ?? {}) : {}
+  }
+
+  /** Write one generated hub page, unless a hand-written one is in the way. */
+  const writeHub = (target, title, description, header, rows) => {
+    const file = path.join(wikiDir, target)
+    if (fs.existsSync(file) && !force && !isMarked(readText(file))) {
+      skipped.push(target)
+      return
+    }
+    const lines = ['---', `title: ${yamlString(title)}`, `description: ${yamlString(description)}`, '---', '', `# ${prose(title)}`, MARKER, '', prose(description), '']
+    if (rows.length) lines.push(`| ${header.join(' | ')} |`, `|${header.map(() => '------').join('|')}|`, ...rows, '')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, lines.join('\n'))
+    written.push(target)
+  }
+
+  // ---- section indexes --------------------------------------------------------
   for (const { node, dir } of sections) {
     const target = `${dir}/index.md`
     const children = (Array.isArray(node.children) ? node.children : []).filter((c) => c && typeof c === 'object')
@@ -114,8 +124,9 @@ if (catalogue) {
     const rows = []
     for (const child of children) {
       if (typeof child.path === 'string') {
-        const fm = frontmatterOf(child.path)
-        rows.push(`| [${linkText(fm.title || child.name)}](${relLink(dir, child.path)}) | ${cell(fm.description)} |`)
+        const childPath = child.path.replace(/\\/g, '/')
+        const fm = frontmatterOf(childPath)
+        rows.push(`| [${linkText(fm.title || child.name)}](${relLink(dir, childPath)}) | ${cell(fm.description)} |`)
       } else if (typeof child.dir === 'string') {
         const childDesc = child.description || `Pages in the ${child.name} section.`
         rows.push(`| [${linkText(child.name)}](${relLink(dir, `${resolveDir(child, dir)}/index.md`)}) | ${cell(childDesc)} |`)
@@ -123,53 +134,74 @@ if (catalogue) {
     }
     writeHub(target, name, description, ['Page', 'What it covers'], rows)
   }
-}
 
-// ---- onboarding hub ---------------------------------------------------------
-const AUDIENCE = {
-  'contributor-guide.md': 'New contributors',
-  'staff-engineer-guide.md': 'Staff and principal engineers',
-  'executive-guide.md': 'Engineering leaders',
-  'product-manager-guide.md': 'Product managers',
-}
-const onboardingDir = path.join(wikiDir, 'onboarding')
-if (fs.existsSync(onboardingDir)) {
-  const present = fs.readdirSync(onboardingDir).filter((f) => f.endsWith('.md') && f !== 'index.md')
-  const rank = (f) => (ONBOARDING_ORDER.includes(f) ? ONBOARDING_ORDER.indexOf(f) : ONBOARDING_ORDER.length)
-  const guides = present.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-  if (guides.length) {
-    const rows = guides.map((f) => {
-      const fm = frontmatterOf(`onboarding/${f}`)
-      return `| [${linkText(fm.title || f.replace(/\.md$/, ''))}](./${f}) | ${AUDIENCE[f] ?? ''} | ${cell(fm.description)} |`
-    })
+  // ---- onboarding hub ---------------------------------------------------------
+  const AUDIENCE = {
+    'contributor-guide.md': 'New contributors',
+    'staff-engineer-guide.md': 'Staff and principal engineers',
+    'executive-guide.md': 'Engineering leaders',
+    'product-manager-guide.md': 'Product managers',
+  }
+  const onboardingDir = path.join(wikiDir, 'onboarding')
+  // Only files the site builds: AGENTS.md, CLAUDE.md and README.md are not pages.
+  const present = fs.existsSync(onboardingDir) ? fs.readdirSync(onboardingDir).filter((f) => f.endsWith('.md') && f !== 'index.md' && !SKIP_FILES.has(f)) : []
+  if (present.length) {
+    const rank = (f) => (ONBOARDING_ORDER.includes(f) ? ONBOARDING_ORDER.indexOf(f) : ONBOARDING_ORDER.length)
+    const rows = present
+      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+      .map((f) => {
+        const fm = frontmatterOf(`onboarding/${f}`)
+        return `| [${linkText(fm.title || f.replace(/\.md$/, ''))}](./${f}) | ${AUDIENCE[f] ?? ''} | ${cell(fm.description)} |`
+      })
     writeHub('onboarding/index.md', 'Onboarding', 'Guides to this codebase, one per audience. Pick the one written for you.', ['Guide', 'Audience', 'What it covers'], rows)
   } else {
-    console.log('no onboarding guides; hub not written')
+    messages.push('no onboarding guides; hub not written')
   }
-} else {
-  console.log('no onboarding guides; hub not written')
+
+  // ---- prune ------------------------------------------------------------------
+  if (prune && catalogue) {
+    const visit = (dir) => {
+      for (const e of fs.readdirSync(path.join(wikiDir, dir), { withFileTypes: true })) {
+        if (e.isDirectory() && !e.name.startsWith('.')) visit(`${dir}/${e.name}`)
+      }
+      const index = path.join(wikiDir, dir, 'index.md')
+      if (!sectionDirs.has(dir) && fs.existsSync(index) && isMarked(readText(index))) {
+        fs.rmSync(index)
+        removed.push(`${dir}/index.md`)
+        if (!fs.readdirSync(path.join(wikiDir, dir)).length) fs.rmdirSync(path.join(wikiDir, dir))
+      }
+    }
+    for (const e of fs.readdirSync(wikiDir, { withFileTypes: true })) {
+      if (e.isDirectory() && /^\d+-/.test(e.name)) visit(e.name)
+    }
+  }
+  if (!catalogue) messages.push('no catalogue.json: section indexes not generated')
+  return { ok: true, written, skipped, removed, messages, prune }
 }
 
-// ---- prune ------------------------------------------------------------------
-if (prune && catalogue) {
-  const visit = (dir) => {
-    for (const e of fs.readdirSync(path.join(wikiDir, dir), { withFileTypes: true })) {
-      if (e.isDirectory() && !e.name.startsWith('.')) visit(`${dir}/${e.name}`)
-    }
-    const index = path.join(wikiDir, dir, 'index.md')
-    if (!sectionDirs.has(dir) && fs.existsSync(index) && isMarked(index)) {
-      fs.rmSync(index)
-      removed.push(`${dir}/index.md`)
-      if (!fs.readdirSync(path.join(wikiDir, dir)).length) fs.rmdirSync(path.join(wikiDir, dir))
-    }
-  }
-  for (const e of fs.readdirSync(wikiDir, { withFileTypes: true })) {
-    if (e.isDirectory() && /^\d+-/.test(e.name)) visit(e.name)
+function main() {
+  try {
+    const result = genIndexes(parseArgs(process.argv.slice(2)))
+    for (const f of result.written) console.log(`wrote    ${f}`)
+    for (const f of result.skipped) console.log(`skipped  ${f} (no deep-wiki marker; pass --force to replace)`)
+    for (const f of result.removed) console.log(`removed  ${f} (its folder is not a catalogue section)`)
+    for (const m of result.messages) console.log(m)
+    console.log(`${result.written.length} hub page(s) written, ${result.skipped.length} skipped${result.prune ? `, ${result.removed.length} removed` : ''}`)
+    return 0
+  } catch (e) {
+    // Bad input and I/O failures alike: exit 2, one line.
+    console.error(e instanceof UsageError || e?.code ? e.message : `internal error: ${e?.stack ?? e}`)
+    return 2
   }
 }
 
-for (const f of written) console.log(`wrote    ${f}`)
-for (const f of skipped) console.log(`skipped  ${f} (no deep-wiki marker; pass --force to replace)`)
-for (const f of removed) console.log(`removed  ${f} (its folder is not a catalogue section)`)
-if (!catalogue) console.log('no catalogue.json: section indexes not generated')
-console.log(`${written.length} hub page(s) written, ${skipped.length} skipped${prune ? `, ${removed.length} removed` : ''}`)
+function isMain() {
+  if (!process.argv[1]) return false
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+
+if (isMain()) process.exitCode = main()

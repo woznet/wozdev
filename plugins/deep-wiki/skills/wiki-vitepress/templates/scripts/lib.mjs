@@ -14,9 +14,20 @@ export const ONBOARDING_ORDER = [
   'product-manager-guide.md',
 ]
 
-// Not part of the site. Skipped at the wiki root only: a section may own a folder with one of these names.
-const ROOT_SKIP_DIRS = new Set(['node_modules', 'dist', 'scripts', 'public'])
-const SKIP_FILES = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md'])
+// Not part of the site. `scripts` and `public` are skipped at the wiki root only: a nested folder
+// may carry one of those names. VitePress never builds `dist` or `node_modules`, at any depth.
+export const ROOT_SKIP_DIRS = new Set(['scripts', 'public'])
+export const NEVER_PAGE_DIRS = new Set(['dist', 'node_modules'])
+/** Folder names a catalogue section may not use, at any depth. */
+export const RESERVED_DIR_SEGMENTS = new Set(['dist', 'node_modules', 'public', 'scripts'])
+export const SKIP_FILES = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md'])
+
+// HTML that Vue compiles without complaint; anything else tag-shaped must be in backticks.
+export const HTML_TAGS = new Set(
+  ('a abbr b blockquote br caption code dd del details div dl dt em figcaption figure h1 h2 h3 h4 h5 h6 hr i img ins kbd ' +
+    'li mark ol p pre q s small span strong sub summary sup table tbody td tfoot th thead tr u ul var wbr').split(' '),
+)
+export const VOID_TAGS = new Set(['br', 'hr', 'img', 'wbr'])
 
 export const posix = (p) => p.split(path.sep).join('/')
 
@@ -32,7 +43,8 @@ export function listPages(wikiDir) {
     for (const e of fs.readdirSync(path.join(wikiDir, dir), { withFileTypes: true })) {
       const rel = dir ? `${dir}/${e.name}` : e.name
       if (e.isDirectory()) {
-        if (!e.name.startsWith('.') && !(dir === '' && ROOT_SKIP_DIRS.has(e.name))) visit(rel)
+        const skipped = e.name.startsWith('.') || NEVER_PAGE_DIRS.has(e.name) || (dir === '' && ROOT_SKIP_DIRS.has(e.name))
+        if (!skipped) visit(rel)
       } else if (e.name.endsWith('.md') && !SKIP_FILES.has(e.name)) {
         out.push(rel)
       }
@@ -42,27 +54,44 @@ export function listPages(wikiDir) {
   return out.sort()
 }
 
-function unquote(value) {
-  const q = value[0]
-  if (value.length >= 2 && (q === '"' || q === "'") && value.endsWith(q)) {
-    const inner = value.slice(1, -1)
-    return q === '"' ? inner.replace(/\\(["\\])/g, '$1') : inner.replace(/''/g, "'")
+// Escapes a YAML double-quoted scalar accepts. "C:\Users" is not one of them, and the build fails on it.
+const YAML_ESCAPE = /\\(?:[0abtnvfre "/\\N_LP]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/y
+
+/** Read a quoted YAML scalar: `{ value, problem }`. A trailing ` # comment` is allowed. */
+function readQuoted(raw) {
+  const q = raw[0]
+  let value = ''
+  for (let i = 1; i < raw.length; i++) {
+    const c = raw[i]
+    if (q === '"' && c === '\\') {
+      YAML_ESCAPE.lastIndex = i
+      const esc = YAML_ESCAPE.exec(raw)
+      if (!esc) {
+        return { value: raw.slice(1), problem: `has an invalid escape "${raw.slice(i, i + 2)}"; write a backslash as \\\\ or use single quotes` }
+      }
+      value += esc[0] === '\\"' ? '"' : esc[0] === '\\\\' ? '\\' : esc[0] === '\\/' ? '/' : esc[0]
+      i += esc[0].length - 1
+    } else if (q === "'" && c === "'" && raw[i + 1] === "'") {
+      value += "'"
+      i++
+    } else if (c === q) {
+      const rest = raw.slice(i + 1)
+      if (rest.trim() === '' || /^\s+#/.test(rest)) return { value, problem: null }
+      return { value, problem: `has text after its closing quote; ${q === '"' ? 'escape an inner " as \\"' : "write an inner ' as ''"}` }
+    } else value += c
   }
-  return value
+  return { value, problem: 'has an unbalanced quote' }
 }
 
-/** Why a raw `title`/`description` value would not survive a real YAML parser, or null when it is fine. */
-function yamlProblem(raw) {
-  if (raw === '') return 'is empty'
-  if (/^[>|][+-]?\d*\s*$/.test(raw)) return 'is a block scalar; write the value on one line'
-  const q = raw[0]
-  if (q === '"' || q === "'") {
-    return raw.length >= 2 && raw.endsWith(q) ? null : 'has an unbalanced quote'
-  }
+/** A raw frontmatter value: `{ value, problem }`. `problem` says why a real YAML parser would reject or misread it. */
+function readScalar(raw) {
+  if (raw === '') return { value: '', problem: 'is empty' }
+  if (/^[>|][+-]?\d*\s*$/.test(raw)) return { value: '', problem: 'is a block scalar; write the value on one line' }
+  if (raw[0] === '"' || raw[0] === "'") return readQuoted(raw)
   if (/: |:$| #/.test(raw) || /^[[\]{}>|*&!%@`#,]/.test(raw) || /^[-?:] /.test(raw)) {
-    return 'must be wrapped in double quotes (it contains YAML syntax)'
+    return { value: raw, problem: 'must be wrapped in double quotes (it contains YAML syntax)' }
   }
-  return null
+  return { value: raw, problem: null }
 }
 
 /**
@@ -77,10 +106,9 @@ export function parseFrontmatter(text) {
   for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(/^([A-Za-z_][\w-]*):(?:\s+(.*))?$/)
     if (!kv) continue
-    const raw = (kv[2] ?? '').trim()
-    const problem = kv[1] === 'title' || kv[1] === 'description' ? yamlProblem(raw) : null
-    if (problem) issues.push({ key: kv[1], problem })
-    data[kv[1]] = problem && !/quote|YAML/.test(problem) ? '' : unquote(raw)
+    const { value, problem } = readScalar((kv[2] ?? '').trim())
+    if (problem && (kv[1] === 'title' || kv[1] === 'description')) issues.push({ key: kv[1], problem })
+    data[kv[1]] = value
   }
   return { data, lineCount: m[0].split('\n').length - 1, issues }
 }
@@ -115,6 +143,20 @@ export function resolveDir(node, parentDir) {
 }
 
 /**
+ * Why a resolved section folder cannot be used, or null when it is fine: lowercase kebab-case
+ * segments (`NN-slug` first), nothing that leaves the wiki, no folder the site never builds.
+ */
+export function sectionDirProblem(dir) {
+  const segments = String(dir).split('/')
+  if (segments.some((s) => s === '..' || s === '.' || s === '')) return 'must stay inside the wiki (no "..", ".", or empty segment)'
+  if (!/^\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(segments[0])) return 'must start with a folder that looks like NN-slug'
+  const bad = segments.slice(1).find((s) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(s))
+  if (bad !== undefined) return `folder "${bad}" must be lowercase kebab-case`
+  const reserved = segments.find((s) => RESERVED_DIR_SEGMENTS.has(s))
+  return reserved ? `folder "${reserved}" is reserved (dist, node_modules, public, scripts)` : null
+}
+
+/**
  * Depth-first walk over catalogue nodes. `visit(node, { depth, parent, dir, parentDir })`;
  * `dir` is set for section nodes. Entries that are not objects are skipped.
  */
@@ -134,34 +176,181 @@ export function normalizeBase(value) {
 }
 
 /**
- * A string constant from `<wiki>/.vitepress/config.mts` (`const NAME = '...'` or `"..."`).
- * Returns '' when the config is missing, the constant is absent, or it is still a `__PLACEHOLDER__`.
+ * A `--base` argument: a repository name with or without slashes, or `root` for '/'.
+ * Throws when the shell rewrote a slash-prefixed value into a file path (Git Bash on Windows does).
  */
-export function readConfigConst(wikiDir, name) {
-  const config = path.join(wikiDir, '.vitepress', 'config.mts')
-  if (!fs.existsSync(config)) return ''
-  const literal = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')`
-  const m = readText(config).match(new RegExp(`const ${name}${String.raw`\s*=\s*`}${literal}`))
-  if (!m) return ''
-  let value
-  if (m[1][0] === '"') {
-    try {
-      value = JSON.parse(m[1])
-    } catch {
-      value = m[1].slice(1, -1)
-    }
-  } else {
-    value = m[1].slice(1, -1).replace(/\\(['\\])/g, '$1')
+export function baseFromArg(value) {
+  const text = String(value ?? '').trim()
+  if (/[:\\]/.test(text)) {
+    throw new Error(`--base "${text}" looks like a file path: the shell rewrote the leading slash. Pass the name without slashes (--base my-repo), or --base root for "/"`)
   }
-  return /^__[A-Z_]+__$/.test(value) ? '' : value
+  return text.toLowerCase() === 'root' ? '/' : normalizeBase(text)
 }
 
-/** The git top level that contains `dir`, or null when `dir` is not inside a git repository. */
+/** A `--repo-url` argument: `none`, an empty string, or a literal pair of quotes all mean "no URL". */
+export function repoUrlFromArg(value) {
+  const text = String(value ?? '').trim()
+  if (/^(none|''|"")?$/i.test(text)) return ''
+  return text.replace(/\/+$/, '').replace(/\.git$/, '').replace(/\/+$/, '')
+}
+
+/** The git host family of a repository URL. Anything unrecognised cites in the `local` format. */
+export function inferHost(repoUrl) {
+  let hostname = ''
+  try {
+    hostname = new URL(repoUrl).hostname.toLowerCase()
+  } catch {
+    return 'local'
+  }
+  if (hostname === 'github.com' || hostname.startsWith('github.')) return 'github'
+  if (hostname.includes('gitlab')) return 'gitlab'
+  if (hostname === 'dev.azure.com' || hostname.endsWith('.visualstudio.com')) return 'azure-devops'
+  return 'local'
+}
+
+const CONST_LITERAL = String.raw`("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')`
+/** Matches `const NAME = '...'` when the quoted literal is the whole value (a comment may follow). */
+export const configConstPattern = (name) =>
+  new RegExp(`^(const ${name}${String.raw`[ \t]*=[ \t]*`})${CONST_LITERAL}(?=[ \\t]*;?[ \\t]*(?://.*)?\\r?$)`, 'm')
+
+/**
+ * A string constant from `<wiki>/.vitepress/config.mts` (`const NAME = '...'` or `"..."`), which
+ * may be empty. Returns undefined when the config is missing, the constant is absent or not a
+ * plain literal (someone customised it), or it is still a `__PLACEHOLDER__`.
+ */
+export function readConfigLiteral(wikiDir, name) {
+  const config = path.join(wikiDir, '.vitepress', 'config.mts')
+  if (!fs.existsSync(config)) return undefined
+  const m = readText(config).match(configConstPattern(name))
+  if (!m) return undefined
+  let value
+  if (m[2][0] === '"') {
+    try {
+      value = JSON.parse(m[2])
+    } catch {
+      value = m[2].slice(1, -1)
+    }
+  } else {
+    value = m[2].slice(1, -1).replace(/\\(['\\])/g, '$1')
+  }
+  return /^__[A-Z_]+__$/.test(value) ? undefined : value
+}
+
+/** Like readConfigLiteral, with '' for "not available". */
+export const readConfigConst = (wikiDir, name) => readConfigLiteral(wikiDir, name) ?? ''
+
+/**
+ * Where the site lives and which repository it documents. When `.vitepress/config.mts` exists its
+ * constants are authoritative; a value it does not hold as a plain literal, and everything in a
+ * wiki without a site, comes from the state file. "Has a site" means that config file exists.
+ */
+export function resolveSite(wikiDir, state = loadState(wikiDir)) {
+  const hasSite = fs.existsSync(path.join(wikiDir, '.vitepress', 'config.mts'))
+  const recorded = (key) => (typeof state[key] === 'string' ? state[key] : '')
+  const pick = (constant, key) => (hasSite ? readConfigLiteral(wikiDir, constant) : undefined) ?? recorded(key)
+  const repoUrl = pick('REPO_URL', 'repoUrl').trim().replace(/\/+$/, '')
+  return {
+    hasSite,
+    base: normalizeBase(pick('BASE', 'base') || '/'),
+    repoUrl,
+    branch: pick('BRANCH', 'branch'),
+    host: recorded('host') || inferHost(repoUrl),
+  }
+}
+
+/** The path as the file system spells it: symlinks, junctions, short names, and drive-letter case resolved. */
+export function realPath(p) {
+  try {
+    return fs.realpathSync.native(p)
+  } catch {
+    return path.resolve(p)
+  }
+}
+
+/** `target` relative to `root` with forward slashes ('' when they are the same folder), or null when it is not inside. */
+export function relativeInside(root, target) {
+  const rel = path.relative(realPath(root), realPath(target))
+  return rel.startsWith('..') || path.isAbsolute(rel) ? null : posix(rel)
+}
+
+/** The git top level that contains `dir` (as a real path), or null when `dir` is not inside a git repository. */
 export function gitTopLevel(dir) {
   try {
     const top = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    return top ? path.resolve(top) : null
+    return top ? realPath(top) : null
   } catch {
     return null
   }
+}
+
+/**
+ * True when the deep-wiki marker is one of the first five non-blank lines after the frontmatter,
+ * where the generators put it. A file that merely quotes the marker further down is not ours.
+ */
+export function isMarked(text) {
+  const body = String(text).replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '')
+  return body
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .slice(0, 5)
+    .some((l) => l.trim() === MARKER)
+}
+
+/**
+ * Line-by-line code-fence tracker shared by the checker, the llms generator, and the site config.
+ * Call the returned function with each line in order; it answers
+ *   { kind: 'open', lang } | { kind: 'close' } | { kind: 'code' } | { kind: 'text' }.
+ * A fence may sit inside a blockquote or a list item (where it is indented past three spaces).
+ * A line such as "```npm test``` runs tests." is inline code: a backtick fence has no backtick
+ * in its info string.
+ */
+export function createFenceScanner() {
+  let fence = null
+  let inList = false
+  const width = (s) => s.replace(/\t/g, '    ').length
+  return (line) => {
+    const bare = line.replace(/^(?:\s{0,3}>[ \t]?)+/, '')
+    if (fence) {
+      const close = bare.match(/^\s*(`{3,}|~{3,})[ \t]*$/)
+      if (close && close[1][0] === fence.char && close[1].length >= fence.len) {
+        fence = null
+        return { kind: 'close' }
+      }
+      return { kind: 'code' }
+    }
+    const item = bare.match(/^\s*(?:[-*+]|\d{1,9}[.)])(?:\s+|$)/)
+    if (item) inList = true
+    else if (bare.trim() && width(bare.match(/^\s*/)[0]) === 0) inList = false
+    const open = (item ? bare.slice(item[0].length) : bare).match(/^(\s*)(`{3,}|~{3,})(.*)$/)
+    if (open && (item || inList || width(open[1]) <= 3) && !(open[2][0] === '`' && open[3].includes('`'))) {
+      fence = { char: open[2][0], len: open[2].length }
+      return { kind: 'open', lang: (open[3].trim().split(/[\s{:]/)[0] ?? '').toLowerCase() }
+    }
+    return { kind: 'text' }
+  }
+}
+
+const NOT_SOURCE_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', 'out', 'target', 'coverage', '.venv', 'venv', '__pycache__'])
+
+/** How many files the repository holds outside the wiki folder, counted up to `limit`. */
+export function countSourceFiles(repoRoot, wikiDir, limit = 5) {
+  const skip = realPath(wikiDir)
+  let count = 0
+  const visit = (dir) => {
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (count >= limit) return
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        if (!NOT_SOURCE_DIRS.has(e.name) && realPath(full) !== skip) visit(full)
+      } else if (e.isFile()) count++
+    }
+  }
+  visit(repoRoot)
+  return count
 }

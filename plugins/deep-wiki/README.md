@@ -53,9 +53,9 @@ Pick one of the two pipelines:
 | Site | Scaffold only, no `npm install` or build | Scaffold, `npm install`, and build (skip with `--no-build`) |
 | Also writes | `AGENTS.md`/`CLAUDE.md` (root and `wiki/`), llms files | The same |
 
-Neither pipeline creates a deploy workflow. Add a focus area to narrow either one (`/deep-wiki:generate src/api`).
+Neither pipeline creates a deploy workflow. Add a focus area (a subsystem or folder) to narrow either one (`/deep-wiki:generate src/api`): only that part is written and nothing is deleted.
 
-Running `generate` on an existing wiki asks whether to regenerate, fill in what is missing, or stop; see [Write Modes](#write-modes). `/deep-wiki:catalogue` followed by `/deep-wiki:generate` with "fill missing" keeps the catalogue you reviewed.
+Running `generate` on an existing wiki asks whether to regenerate, fill in what is missing, or stop; see [Write Modes](#write-modes). `/deep-wiki:catalogue` followed by `/deep-wiki:generate` with "fill missing" keeps the catalogue you reviewed. Running `crisp` on an existing wiki asks before replacing it. To move a crisp wiki to full depth, run `generate` and choose regenerate.
 
 ### 3. Preview the Site
 
@@ -68,9 +68,9 @@ After `generate`, the dependencies are already installed.
 
 ### 4. Publish
 
-Run `/deep-wiki:deploy` to add `.github/workflows/deploy-wiki.yml` and set the site's base path, then set **Settings → Pages → Source** to **GitHub Actions** once.
+For a repository on github.com, run `/deep-wiki:deploy` to add `.github/workflows/deploy-wiki.yml` and set the site's base path, then set **Settings → Pages → Source** to **GitHub Actions** once.
 
-Commit `wiki/` (including `scripts/`, `catalogue.json`, `.deep-wiki.json`, and `.deep-wiki-llms.json`; the deployed build needs them) and any generated root files (`llms.txt`, `AGENTS.md`, `CLAUDE.md`) before you push.
+Commit `wiki/` and any generated root files (`llms.txt`, `AGENTS.md`, `CLAUDE.md`) before you push. The deployed build needs `wiki/scripts/`, `wiki/catalogue.json`, and `wiki/.deep-wiki.json`; commit `wiki/.deep-wiki-llms.json` as well so later runs keep your summary.
 
 ### 5. Beyond the Wiki
 
@@ -98,9 +98,9 @@ Plain requests work too: "what changed this month?" triggers the changelog skill
 | `/deep-wiki:ask <question>` | Q&A grounded in source files |
 | `/deep-wiki:changelog [range \| --since date] [--write]` | Categorized changelog from git history; `--write` saves `wiki/changelog.md` |
 | `/deep-wiki:build [--no-build]` | Scaffold the VitePress site, generate the index pages, run the site checks, then build |
-| `/deep-wiki:deploy` | GitHub Pages workflow (`.github/workflows/deploy-wiki.yml`) and base path |
+| `/deep-wiki:deploy` | GitHub Pages workflow (`.github/workflows/deploy-wiki.yml`) and base path, for repositories on github.com |
 | `/deep-wiki:agents-md [folder ...]` | `AGENTS.md` + `CLAUDE.md` for the root, `wiki/`, and package roots, where missing |
-| `/deep-wiki:llms` | `llms.txt` (root, `wiki/`, `wiki/public/`) and `llms-full.txt` (`wiki/`, `wiki/public/`) |
+| `/deep-wiki:llms` | `llms.txt` (root, `wiki/`) and `wiki/llms-full.txt`, plus `wiki/public/` copies when the wiki has a site |
 
 Naming a target (`page <topic>`, `onboard <guide>`, `catalogue`) is a request to replace it. `generate` and `crisp` hold their own orchestration; the other commands load the matching skill, which holds the procedure.
 
@@ -130,22 +130,22 @@ Skills also trigger on their own when a request matches their description.
 | `deep-wiki:wiki-writer` | conventions, page-writer (loads onboarding for a guide) | `generate` pages, onboarding guides, repairs; optionally `crisp` and `onboard` |
 | `deep-wiki:wiki-researcher` | conventions, researcher | Delegated research. Read-only (`Read`, `Grep`, `Glob`): it returns its report and the dispatcher saves it |
 
-Agents never ask the user questions. The dispatcher passes `REPO_URL`, `HOST`, `BRANCH`, and what each agent needs: depth, write mode, output paths, and the sibling page list for writers; the focus for the architect.
+Agents never ask the user questions. The dispatcher passes `REPO_URL`, `HOST`, `BRANCH`, and what each agent needs: depth, output paths, and the sibling page list for writers; the focus for the architect. An agent always writes the paths it was given; the write mode decides what gets dispatched.
 
 ## Output Layout
 
 ```text
 wiki/
 ├── .deep-wiki.json        # Run state: depth, host, repoUrl, branch, base, wikiDir, version
-├── .deep-wiki-llms.json   # Input for gen-llms.mjs (summary, descriptions); kept and committed
-├── catalogue.json         # Table of contents (generate only)
+├── .deep-wiki-llms.json   # Input for gen-llms.mjs (summary, descriptions); yours to edit, committed
+├── catalogue.json         # Table of contents (generate and catalogue; a crisp wiki has none)
 ├── index.md               # Developer landing page
 ├── onboarding/            # Guides, plus a generated index.md hub
-├── NN-section/*.md        # Pages, plus a generated index.md per section
+├── NN-section/*.md        # Pages, plus a generated index.md per catalogue section
 ├── changelog.md           # Optional (--write)
 ├── research/*.md          # Optional (--write)
 ├── llms.txt, llms-full.txt
-├── public/                # logo.svg, llms copies (served at the site root)
+├── public/                # logo.svg, llms copies (served at the site root; only when the wiki has a site)
 ├── AGENTS.md, CLAUDE.md
 ├── package.json
 ├── scripts/               # init-wiki, check-wiki, gen-section-indexes, gen-llms, lib (.mjs)
@@ -157,18 +157,20 @@ Section and onboarding `index.md` files and all llms files are script output. Do
 
 ## Write Modes
 
-A first run writes everything that is missing and asks nothing; existing `AGENTS.md`, `CLAUDE.md`, and root `llms.txt` files are kept. On an existing wiki, `generate` asks for one of two write modes:
+A first run is `fill-missing` and is not asked to choose a write mode; your own `AGENTS.md`, `CLAUDE.md`, and root `llms.txt` are kept. So is a run narrowed by a focus. On an existing wiki, `generate` asks for one of two write modes:
 
 | | `fill-missing` | `regenerate` |
 |---|---|---|
 | Catalogue, pages, guides, landing page | Written only if missing | Replaced |
-| Site scaffold (`package.json`, `.vitepress/`) | Written only if missing | Replaced; the base path is kept |
-| Generated indexes, wiki llms files, `scripts/` | Refreshed | Refreshed |
-| Root `llms.txt` | Replaced only if it carries the marker | Same |
+| Site scaffold (`package.json`, `.vitepress/`, `.gitignore`, logo) | Written only if missing | Replaced; the base path is kept |
+| Wiki llms files, `scripts/` | Refreshed | Refreshed |
+| Generated section and onboarding indexes | Written if missing or marked | Replaced |
+| `.deep-wiki-llms.json` | Created if missing, otherwise only stale entries updated | Same |
+| Root `llms.txt` | Replaced if marked; an unmarked one is kept | Replaced if marked; an unmarked one is asked about |
 | `AGENTS.md` / `CLAUDE.md` | Written only if missing | Replaced if marked; unmarked ones are asked about |
 | Sections and pages no longer in the catalogue | Left | Deleted, after the paths are listed and you confirm |
 
-Generated files outside page content carry `<!-- generated by deep-wiki -->`. Nothing is deleted without a list and a yes, a run narrowed by a focus never deletes, and `fill-missing` reports problems in existing pages instead of rewriting them.
+Generated files outside page content carry `<!-- generated by deep-wiki -->` on the line after the H1; a file is treated as generated only when the marker is there. Nothing is deleted without a list and a yes, a run narrowed by a focus never deletes, and problems in pages a run did not write are reported instead of fixed.
 
 ## Scripts
 
@@ -179,15 +181,15 @@ node wiki/scripts/check-wiki.mjs wiki                 # check everything; exit 1
 node wiki/scripts/check-wiki.mjs wiki --page 02-architecture/overview.md
 node wiki/scripts/check-wiki.mjs wiki --report        # Section | Pages | Diagrams | Cited files
 node wiki/scripts/gen-section-indexes.mjs wiki        # section index.md files and the onboarding hub
-node wiki/scripts/gen-llms.mjs wiki --input wiki/.deep-wiki-llms.json
-node wiki/scripts/init-wiki.mjs wiki --base /my-repo/ # change a recorded value such as the base path
+node wiki/scripts/gen-llms.mjs wiki                   # llms files; reads wiki/.deep-wiki-llms.json when it exists
+node wiki/scripts/init-wiki.mjs wiki --base my-repo   # change the base path (the script adds the slashes; "root" means /)
 ```
 
-`init-wiki.mjs` also creates the scaffold: the pipelines run it from the plugin's `templates/scripts/` folder, where it copies the templates and fills their placeholders. `lib.mjs` is shared code. The same checks are available as `npm --prefix wiki run check`, `run indexes`, and `run llms`; `npm --prefix wiki run build` runs the site-affecting checks (`--site`) and then `vitepress build`.
+`init-wiki.mjs` also creates the scaffold: the pipelines run it from the plugin's `templates/scripts/` folder, where it copies the templates and fills their placeholders. `lib.mjs` is shared code. The same scripts are available as `npm --prefix wiki run check`, `run indexes`, and `run llms`; `npm --prefix wiki run build` runs the site-affecting checks (`--site`) and then `vitepress build`.
 
-The checker reads the depth (full or crisp), repository URL, and branch from `wiki/.deep-wiki.json`. It verifies citations against the repository that contains `wiki/`; pass `--repo <path>` if the source is elsewhere, or `--no-source` when it is not on disk.
+The checker reads the depth (full or crisp) from `wiki/.deep-wiki.json`, and the repository URL and branch from `wiki/.vitepress/config.mts` when the wiki has a site, otherwise from that state file. A page with `depth: crisp` in its frontmatter is held to the crisp minimums. It verifies citations against the repository that contains `wiki/`; pass `--repo <path>` if the source is elsewhere, or `--no-source` when it is not on disk.
 
-- **Errors**: missing, YAML-unsafe, or over-long frontmatter titles; `{{ }}` and tag-shaped text outside code; Mermaid rule breaks (`<br/>`, no `autonumber`, light fills); broken relative links and links that leave the wiki; cited files or line ranges that do not exist; pages under the diagram and citation minimums; catalogue schema problems and pages never written; unfilled placeholders; malformed or incomplete llms files.
+- **Errors**: missing, YAML-unsafe, or over-long frontmatter titles; `{{ }}` and tag-shaped text outside code; Mermaid rule breaks (`<br/>`, no `autonumber`, light fills); broken relative links, folder links, and links that leave the wiki; cited files or line ranges that do not exist; pages under the diagram and citation minimums; catalogue schema problems and pages never written; unfilled placeholders; malformed or incomplete llms files.
 - **Warnings**: wide tables, dead `#anchor` links, diagrams without a `Sources` comment, pages missing from the catalogue, an `llms.txt` over 5 KB, and files that appeared or changed in the repository during a run.
 
 It does not parse Mermaid syntax; preview the site to verify diagrams.
@@ -219,7 +221,7 @@ Compared with upstream 2.0.0:
 
 Added in 2.2.0, from reviews of a generated wiki and of the plugin itself:
 
-- **Bundled scripts**: `check-wiki.mjs` replaces the prose checklists; `init-wiki.mjs` writes the scaffold and fills placeholders safely; `gen-section-indexes.mjs` writes section indexes and the onboarding hub (hand-written ones had produced sentence-long sidebar titles ending in `undefined`); `gen-llms.mjs` writes all five llms files within the 5 KB budget. Run state lives in `wiki/.deep-wiki.json`.
+- **Bundled scripts**: `check-wiki.mjs` replaces the prose checklists; `init-wiki.mjs` writes the scaffold and fills placeholders safely; `gen-section-indexes.mjs` writes section indexes and the onboarding hub (hand-written ones had produced sentence-long sidebar titles ending in `undefined`); `gen-llms.mjs` writes the llms files and keeps each `llms.txt` within 5 KB. Run state lives in `wiki/.deep-wiki.json`.
 - **Sidebar**: labels and order come from `catalogue.json`; the index is the group heading's link; `research/`, `changelog.md`, and other root pages are listed.
 - **Layout**: tables scroll inside the text column instead of spilling into the outline, long paths wrap inside cells, the text column is wider, and focus mode and diagram zoom were reworked.
 - **Build safety**: a broken link between pages fails the build, and inline code is `v-pre` so `${{ github.ref }}` and similar text cannot break it.

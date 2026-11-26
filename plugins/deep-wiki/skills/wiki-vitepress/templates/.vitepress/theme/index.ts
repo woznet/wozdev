@@ -132,7 +132,8 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
   // Escape closes a modal <dialog> natively. Removing the element drops every listener above.
   dialog.addEventListener('close', () => {
     dialog.remove()
-    trigger.focus()
+    // After a route change the page that held the trigger is gone.
+    if (trigger.isConnected) trigger.focus()
   })
 
   document.body.appendChild(dialog)
@@ -216,7 +217,9 @@ function setupFocusMode() {
       !e.altKey &&
       !target?.isContentEditable &&
       !['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '') &&
-      !document.querySelector('dialog[open]')
+      !document.querySelector('dialog[open]') &&
+      // Focus mode is a desktop layout: below 960px the button is hidden and the key does nothing.
+      window.matchMedia('(min-width: 960px)').matches
     ) {
       e.preventDefault()
       toggle()
@@ -236,7 +239,15 @@ export default {
     onMounted(init)
     watch(
       () => route.path,
-      () => nextTick(init),
+      () => {
+        // Browser Back with a diagram open: the dialog belongs to the page being left.
+        // Removed here, not left to the dialog's own `close` event, which fires a task later.
+        document.querySelectorAll<HTMLDialogElement>('dialog.mermaid-modal').forEach((d) => {
+          d.close()
+          d.remove()
+        })
+        nextTick(init)
+      },
     )
   },
 }

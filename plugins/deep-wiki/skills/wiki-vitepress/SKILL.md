@@ -20,26 +20,33 @@ The templates live in this skill's `templates/` folder, next to this file. `<ski
 Never copy template files or edit placeholders by hand. Do not read the template files; run the script.
 
 ```bash
-node <skill dir>/templates/scripts/init-wiki.mjs wiki \
-  --title "<project name>" --description "<one specific sentence about the project>" \
-  --repo-url "<REPO_URL, or '' when HOST is local>" --branch "<BRANCH>" --host <HOST> --depth <full|crisp>
+node "<skill dir>/templates/scripts/init-wiki.mjs" wiki --title "<project name>" --description "<one specific sentence about the project>"
 ```
+
+Which flags to pass (the command rules are in conventions section 10):
+
+| Situation | Flags |
+|-----------|-------|
+| `wiki/.deep-wiki.json` exists (the bootstrap ran) | `--title` and `--description` only. Leave out `--depth`, `--host`, `--repo-url`, and `--branch`: the recorded values are used |
+| No `wiki/.deep-wiki.json` | Add `--depth <full\|crisp> --host <HOST> --repo-url <REPO_URL\|none> --branch <BRANCH>` |
+| `wiki/.vitepress/config.mts` exists and the write mode is `fill-missing` | Leave out `--title` and `--description` too; the existing config keeps its own |
 
 | Option | When |
 |--------|------|
 | `--write-mode regenerate` | The calling workflow is in `regenerate` write mode, or the user asked to rebuild the scaffold. Replaces `package.json`, `.vitepress/**`, `.gitignore`, and the logo. Without it, existing scaffold files are kept. |
-| `--base /<repo-name>/` | A GitHub project Pages site. Omit it otherwise: the previous value is kept, and a new site gets `/`. |
-| `--scripts-only` | Before any page exists: install `wiki/scripts/` and write `wiki/.deep-wiki.json`, nothing else. |
+| `--base <repo-name>` | A GitHub project Pages site (the script adds the slashes; `--base root` means `/`). Omit it otherwise: the previous value is kept, and a new site gets `/`. Never pass a value starting with `/`. |
+| `--scripts-only` | The bootstrap in conventions section 10: install `wiki/scripts/` and write `wiki/.deep-wiki.json`, nothing else. |
 | `--package-name <name>` | Override the name in `wiki/package.json` (default: the repository folder name). |
 
 What it does:
 
 - Copies `package.json`, `.gitignore`, `.vitepress/config.mts`, `.vitepress/theme/`, `public/logo.svg`, and `scripts/*.mjs` into `wiki/`. `scripts/` is always refreshed.
 - Fills every placeholder as a safe string literal. Values you omit come from the previous `config.mts` and state file, then from `catalogue.json` (`project`, `summary`).
+- Keeps an existing `config.mts` in `fill-missing`: only a `--base`, `--repo-url`, or `--branch` you pass is patched into it. The title and description there are never changed.
 - Writes `wiki/.deep-wiki.json` (`depth`, `host`, `repoUrl`, `branch`, `base`, `wikiDir`, `version`). The checker and the llms generator read it.
 - Prints `wrote`, `replaced`, `kept`, or `updated` per file. Put those in your report. It never deletes anything.
 
-To change one value later (for example the base path), run the installed copy with just that flag: `node wiki/scripts/init-wiki.mjs wiki --base /<repo-name>/`, then rerun `gen-llms.mjs`.
+To change one value later (for example the base path), run the installed copy with just that flag: `node wiki/scripts/init-wiki.mjs wiki --base <repo-name>`, then rerun `node wiki/scripts/gen-llms.mjs wiki` if `wiki/llms.txt` exists.
 
 The sidebar is built at build time; you never edit it:
 
@@ -85,14 +92,14 @@ Requires Node 22.12 or newer (Mermaid 12). The build runs `check-wiki.mjs . --si
 |---------|-------|-----|
 | `Invalid end tag` / `Element is missing end tag` | Tag-shaped text such as `<T>` outside code | Wrap it in backticks; the checker reports it as `bare-tag` |
 | Build fails with `... is not defined` while rendering a page | `{{ }}` in prose is evaluated by Vue | Put the expression in backticks |
-| YAML error in frontmatter | Unquoted `title` or `description` containing `: ` or `#` | Double-quote both values |
-| `Found dead link` fails the build | A relative link to a page that does not exist, or to a file outside `wiki/` | Fix the link; do not set `ignoreDeadLinks: true` |
+| YAML error in frontmatter | Unquoted `title` or `description` containing `: ` or `#`, or a backslash or quote inside double quotes | Double-quote both values; write `\\` and `\"`, or use single quotes |
+| `Found dead link` fails the build | A relative link to a page that does not exist, a folder link (`./02-architecture`), or a link to a file outside `wiki/` | Link the page file (`index.md` for a section); do not set `ignoreDeadLinks: true` |
 | Sidebar group shows a sentence | A hand-written section `index.md` with a bad `title` | `node wiki/scripts/gen-section-indexes.mjs wiki --force` |
 | Tables or code spill into the right-hand outline | An old or edited `custom.css` | Rerun `init-wiki.mjs` with `--write-mode regenerate` |
 | Diagram shows "Syntax error in text" | Invalid Mermaid; nothing checks syntax before the browser | Fix the diagram source |
 | Preview shows old styles after a rebuild | `vitepress preview` caches `dist/` at start | Restart the preview |
 | `logo.svg` or `llms.txt` 404 on the deployed site | Files in `.vitepress/public/` | VitePress serves `wiki/public/` |
-| Broken assets on GitHub Pages | Wrong `base` | `node wiki/scripts/init-wiki.mjs wiki --base /<repo-name>/` |
+| Broken assets on GitHub Pages | Wrong `base` | `node wiki/scripts/init-wiki.mjs wiki --base <repo-name>` |
 | `npm install` fails with `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | `vitepress-plugin-mermaid` predates Mermaid 12 | Keep the template's `overrides` entry in `wiki/package.json` |
 | Diagrams re-laid out or restyled (ELK layout, "neo" look) | Mermaid 12 defaults | Keep `layout: 'dagre'` and `look: 'classic'` in the `mermaid` config |
 | A light/dark toggle appears | `appearance: 'dark'` | Keep `appearance: 'force-dark'` |

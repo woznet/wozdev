@@ -24,10 +24,10 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. Citation formats,
 
 ## Procedure
 
-1. **Plan (10%).** Count the relevant files and take the word and diagram budget from conventions section 7.
-2. **Analyze (40%).** Read every relevant file completely. Trace call chains end to end. Record a `file:line` anchor for each fact you will state, taken from the file as you read it. A catalogue `prompt` is a pointer, not a fact: if it names a line, a mechanism, or a term the source does not bear out, follow the source.
-3. **Write (40%).** Use the page structure below.
-4. **Validate (10%).** Run the checklist below and fix what fails.
+1. **Plan.** Count the relevant files and take the word and diagram budget from conventions section 7.
+2. **Analyze.** Read every relevant file completely. Trace call chains end to end. Record a `file:line` anchor for each fact you will state, taken from the file as you read it. A catalogue `prompt` is a pointer, not a fact: if it names a line, a mechanism, or a term the source does not bear out, follow the source.
+3. **Write.** Use the page structure below.
+4. **Validate.** Run the checklist below and fix what fails.
 
 ## Page Structure
 
@@ -38,9 +38,9 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. Citation formats,
 5. **Core components**: a table per group, with prose only where the why needs explaining.
 6. **Data flow / interactions**: a `sequenceDiagram`.
 7. **State / lifecycle** (`stateDiagram-v2`) and **Data model** (`erDiagram`), only when the code has them.
-8. **Implementation details**: key algorithms, error handling, and concurrency, with short quoted snippets (each preceded by `<!-- Source: ... -->`). For hard code paths, add pseudocode.
+8. **Implementation details**: key algorithms, error handling, and concurrency, with short quoted snippets. For hard code paths, add pseudocode.
 9. **Configuration**: a `Key | Default | Description | Source` table, when the topic has config.
-10. **Related Pages**: a `Page | Relationship` table of relative links.
+10. **Related Pages**.
 
 A crisp page keeps items 1–4 and 10 and adds only the other sections the topic needs.
 
@@ -53,7 +53,7 @@ Writing rules:
 
 ## Validation Checklist
 
-- [ ] `node wiki/scripts/check-wiki.mjs wiki --page <path relative to wiki/>` reports no errors. Add `--mode crisp` only for a crisp page in a full-depth wiki. If the script is not in `wiki/scripts/`, check frontmatter, thresholds, citations, Mermaid rules, `{{ }}`, bare tags, tables, and links by hand against the conventions.
+- [ ] `node wiki/scripts/check-wiki.mjs wiki --page <path relative to wiki/>` reports no errors. A crisp page in a full-depth wiki carries `depth: crisp` in its frontmatter. If the script is not in `wiki/scripts/`, check frontmatter, thresholds, citations, Mermaid rules, `{{ }}`, bare tags, tables, and links by hand against the conventions.
 - [ ] Every class and function named exists, and each cited line range shows what the sentence says it shows.
-- [ ] Every Mermaid block has balanced brackets and quotes (nothing checks Mermaid syntax for you) and uses the dark palette.
+- [ ] Every Mermaid block has balanced brackets and quotes (nothing checks Mermaid syntax for you).
 - [ ] Inferences are marked as inferences, and nothing is guessed from names.

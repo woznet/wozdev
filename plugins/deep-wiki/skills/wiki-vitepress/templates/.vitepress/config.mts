@@ -5,7 +5,18 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 // The scaffold always copies scripts/ next to .vitepress/, so the site, the checker, and the
 // generators share one frontmatter and catalogue reader.
-import { ONBOARDING_ORDER, loadCatalogue, loadState, parseFrontmatter, readText, walkCatalogue } from '../scripts/lib.mjs'
+import {
+  NEVER_PAGE_DIRS,
+  ONBOARDING_ORDER,
+  ROOT_SKIP_DIRS,
+  createFenceScanner,
+  inferHost,
+  loadCatalogue,
+  loadState,
+  parseFrontmatter,
+  readText,
+  walkCatalogue,
+} from '../scripts/lib.mjs'
 
 // ---------------------------------------------------------------------------
 // Fill these in when scaffolding (see the wiki-vitepress skill).
@@ -39,15 +50,8 @@ function detectHost(): string {
     // Unreadable state file: infer from the URL.
   }
   if (typeof recorded === 'string' && recorded) return recorded
-  let hostname = ''
-  try {
-    hostname = new URL(REPO_URL).hostname.toLowerCase()
-  } catch {
-    return 'local'
-  }
-  if (hostname === 'github.com' || hostname.startsWith('github.')) return 'github'
-  if (hostname.includes('gitlab')) return 'gitlab'
-  return 'other'
+  // Same rule as the scripts: a host that is not recognised is treated as `local`.
+  return inferHost(REPO_URL)
 }
 const host = detectHost()
 
@@ -57,17 +61,11 @@ function titleOf(file: string): string {
   const fm = parseFrontmatter(text)
   const title = fm.data?.title
   if (typeof title === 'string' && title.trim()) return title.trim()
-  let fence = ''
+  const fenceAt = createFenceScanner()
   for (const line of text.split(/\r?\n/).slice(fm.lineCount)) {
-    const mark = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1]
-    if (fence) {
-      if (mark && mark[0] === fence[0] && mark.length >= fence.length) fence = ''
-    } else if (mark) {
-      fence = mark
-    } else {
-      const h1 = line.match(/^#\s+(.+?)\s*#*\s*$/)
-      if (h1) return h1[1]
-    }
+    if (fenceAt(line).kind !== 'text') continue
+    const h1 = line.match(/^#\s+(.+?)\s*#*\s*$/)
+    if (h1) return h1[1]
   }
   return path.basename(file, '.md')
 }
@@ -124,14 +122,16 @@ type SidebarItem = { text: string; link?: string; collapsed?: boolean; items?: S
 
 // Not pages: excluded from the site at any depth (see srcExclude) and never listed.
 const NOT_PAGES = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md'])
-// Not content folders, at the wiki root only. A nested section may use any of these names.
-const ROOT_ONLY_SKIPPED = new Set(['public', 'scripts', 'dist', 'node_modules'])
+// Folders that hold no pages, as listPages() in scripts/lib.mjs defines them: `public` and
+// `scripts` at the wiki root only; `dist` and `node_modules` at any depth, because VitePress
+// never builds those.
 
 /** The sidebar renders labels as HTML, so `List<T>` would lose its `<T>`. */
 const label = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
 const isPage = (name: string) => name.endsWith('.md') && !NOT_PAGES.has(name)
-const isContentDir = (dir: string, name: string) => !name.startsWith('.') && !(dir === '' && ROOT_ONLY_SKIPPED.has(name))
+const isContentDir = (dir: string, name: string) =>
+  !name.startsWith('.') && !NEVER_PAGE_DIRS.has(name) && !(dir === '' && ROOT_SKIP_DIRS.has(name))
 
 /** Sort names inside `dir`: catalogue order, then the given fixed order, then alphabetical. */
 function ordered(dir: string, names: string[], fixed: readonly string[] = []): string[] {
@@ -227,9 +227,9 @@ export default withMermaid(
     // A broken link between wiki pages fails the build. Exempt: localhost URLs and the
     // agent/readme files that srcExclude keeps out of the site.
     ignoreDeadLinks: [/^https?:\/\/(localhost|127\.0\.0\.1)/, /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/],
-    // Agent and readme files are not pages at any depth; scripts/ holds the wiki's Node tools.
-    // Root-level only for the folders, matching listPages() in scripts/lib.mjs.
-    srcExclude: ['**/AGENTS.md', '**/CLAUDE.md', '**/README.md', 'scripts/**', 'dist/**'],
+    // Agent and readme files are not pages at any depth; scripts/ (root only) holds the wiki's
+    // Node tools. VitePress itself already skips every dist/ and node_modules/ folder.
+    srcExclude: ['**/AGENTS.md', '**/CLAUDE.md', '**/README.md', 'scripts/**'],
     // Dark only: no light/dark toggle.
     appearance: 'force-dark',
     head: [

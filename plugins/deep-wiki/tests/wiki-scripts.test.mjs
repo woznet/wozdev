@@ -133,19 +133,19 @@ test('CRLF and BOM files are read like any other', (t) => {
   assert.equal(lib.parseFrontmatter(`${BOM}---\ntitle: A\n---\n`).data.title, 'A')
 })
 
-test('folders named scripts or public are skipped only at the wiki root', (t) => {
-  const nested = { title: 'tools', name: 'Tools', dir: '01-getting-started/scripts', children: [leaf('build', { path: '01-getting-started/scripts/build.md' })] }
+test('scripts and public are skipped at the wiki root only; dist and node_modules at any depth', (t) => {
   const pages = {
-    '01-getting-started/usage.md': null,
-    '01-getting-started/setup.md': goodPage('Setup'),
     '01-getting-started/scripts/build.md': goodPage('Build'),
-    '01-getting-started/scripts/index.md': SECTION_INDEX,
+    '01-getting-started/public/x.md': goodPage('X'),
+    // VitePress never builds these two folders, wherever they are: they hold no pages.
+    '01-getting-started/dist/old.md': 'not built',
+    '01-getting-started/node_modules/pkg/readme.md': 'not built',
     'scripts/notes.md': 'not a page',
     'public/x.md': 'not a page',
   }
-  const f = fixture(t, pages, { catalogue: catalogueOf(leaf('setup'), nested) })
-  const found = lib.listPages(f.wiki).filter((p) => p.includes('scripts') || p.includes('public'))
-  assert.deepEqual(found, ['01-getting-started/scripts/build.md', '01-getting-started/scripts/index.md'])
+  const f = fixture(t, pages)
+  const found = lib.listPages(f.wiki).filter((p) => /scripts|public|dist|node_modules/.test(p))
+  assert.deepEqual(found, ['01-getting-started/public/x.md', '01-getting-started/scripts/build.md'])
   assert.deepEqual(run(f).errors, [])
 })
 
@@ -243,19 +243,35 @@ test('without a catalogue a --page link to a missing sibling is only a warning',
 })
 
 test('links to the wiki root and to excluded files are valid', (t) => {
-  const text = '[Home](../) and [Home](../index.md) and [Agents](../AGENTS.md) and [Top](..).'
+  const text = '[Home](../) and [Home](../index.md) and [Agents](../AGENTS.md) and [Section](./) and [Section](../01-getting-started/) and [Setup](./setup).'
   const result = run(fixture(t, { ...usage(text), 'AGENTS.md': '# Agents\n' }))
   assert.deepEqual(result.errors, [])
   assert.deepEqual(result.warnings, [])
 })
 
-test('a relative link that leaves the wiki is an error, also with --site', (t) => {
-  const text = '[c](../../CONTRIBUTING.md) [r](../../README.md) [p](../../logo.png)'
+test('a folder link without a trailing slash is an error: VitePress reports it dead', (t) => {
+  const result = run(fixture(t, usage('[Top](..) and [Section](../01-getting-started) and [Here](.).')))
+  assert.deepEqual(rules(result), ['link', 'link', 'link'])
+  assert.match(result.errors[1].message, /folder link without a trailing slash.*link \.\.\/01-getting-started\/index\.md/)
+})
+
+test('a relative link that leaves the wiki is an error whatever its extension, also with --site', (t) => {
+  // README.md is exempt (the site config ignores it); the other three are not, asset or page.
+  const text = '[c](../../CONTRIBUTING.md) [r](../../README.md) [p](../../logo.png) [s](../../src/a.ts)'
   const f = fixture(t, usage(text), { repoFiles: { 'CONTRIBUTING.md': 'x', 'logo.png': 'x' } })
-  assert.deepEqual(rules(run(f)), ['link'])
-  assert.deepEqual(rules(run(f, { site: true })), ['link'])
+  assert.deepEqual(rules(run(f)), ['link', 'link', 'link'])
+  assert.deepEqual(rules(run(f, { site: true })), ['link', 'link', 'link'])
   assert.match(messages(run(f)), /CONTRIBUTING\.md leaves the wiki/)
+  assert.match(messages(run(f)), /src\/a\.ts leaves the wiki/)
   assert.deepEqual(rules(run(fixture(t, usage('[m](../../src/main.py)')), { site: true })), ['link'])
+})
+
+test('a file in public/ is linked from the site root, not by a relative path', (t) => {
+  const files = { 'public/logo.svg': '<svg/>', '01-getting-started/shot.png': 'x' }
+  assert.deepEqual(run(fixture(t, { ...usage('![logo](/logo.svg) ![shot](./shot.png)'), ...files })).errors, [])
+  const result = run(fixture(t, { ...usage('![logo](../logo.svg)'), ...files }))
+  assert.deepEqual(rules(result), ['link'])
+  assert.match(messages(result), /exists only in public\/; link it from the site root as \/logo\.svg/)
 })
 
 test('anchors use VitePress slugs and a stray % does not crash', (t) => {
@@ -354,10 +370,33 @@ test('GitLab and Azure DevOps citation links are parsed', (t) => {
 })
 
 test('with no repository URL an unresolved host link is not a citation', (t) => {
+  // Nothing says which repository these links point at, so none of them can be called wrong:
+  // a missing file is ignored, and a line past the end is not reported.
   const text = '[express](https://github.com/expressjs/express/blob/master/lib/router/index.js) [a](https://github.com/o/r/blob/main/src/a.ts#L9)'
-  const result = run(fixture(t, usage(text)))
-  assert.equal(result.errors.length, 1)
-  assert.match(messages(result), /cites line 9/)
+  assert.deepEqual(run(fixture(t, usage(text))).errors, [])
+})
+
+test('with no repository URL a host link counts only when its whole path exists', (t) => {
+  // "deep/src/e.ts" must not match src/e.ts by its tail.
+  const page = goodPage('Usage').replace('(src/e.ts:1-3)', '[e](https://github.com/x/y/blob/main/deep/src/e.ts)')
+  assert.match(messages(run(fixture(t, { '01-getting-started/usage.md': page }))), /cites 4 distinct source file/)
+  const exact = goodPage('Usage').replace('(src/e.ts:1-3)', '[e](https://github.com/x/y/blob/main/src/e.ts)')
+  assert.deepEqual(run(fixture(t, { '01-getting-started/usage.md': exact })).errors, [])
+})
+
+test('host names, ports, and image tags in parentheses are not citations', (t) => {
+  const text = 'Connects to (db.internal:5432) and (example.com:443), image (library/postgres:16).'
+  assert.deepEqual(run(fixture(t, usage(text))).errors, [])
+  // With --no-source nothing can be looked up, so only text that is clearly a file counts.
+  const bare = `${frontmatter('Usage')}\n# Usage\n\n${text} (README.md:1) (src/a.ts:1) (src/b.ts:2)\n\n${diagram('flowchart TD', '  A --> B')}`
+  const result = run(fixture(t, { '01-getting-started/usage.md': bare }), { source: false, mode: 'crisp' })
+  assert.deepEqual(result.pages.find((p) => p.file === '01-getting-started/usage.md').citedFiles, 3)
+})
+
+test('a citation of line 0 is an error; a link to a folder is not a citation', (t) => {
+  const state = withState({ repoUrl: REPO_URL, branch: 'main' })
+  assert.match(messages(run(fixture(t, { ...usage('See (src/a.ts:0).'), ...state }))), /line numbers start at 1/)
+  assert.deepEqual(run(fixture(t, { ...usage(`See [src](${REPO_URL}/blob/main/src).`), ...state })).errors, [])
 })
 
 test('links with parentheses or brackets in the path are read whole', (t) => {
@@ -634,4 +673,171 @@ test('lib exports the shared helpers', (t) => {
   fs.writeFileSync(path.join(f.repo, 'bom.txt'), `${BOM}text`)
   assert.equal(lib.readText(path.join(f.repo, 'bom.txt')), 'text')
   for (const name of ['MARKER', 'parseFrontmatter', 'yamlString', 'loadCatalogue', 'walkCatalogue', 'resolveDir', 'listPages', 'posix']) assert.ok(lib[name], name)
+})
+
+// ---------------------------------------------------------------------------
+// Round two: fences, frontmatter, catalogue, site resolution, thresholds
+// ---------------------------------------------------------------------------
+test('a fence indented inside a list item is still a fence', (t) => {
+  const text = ['1. Add the workflow:', '', `    ${FENCE}yaml`, '    token: ${{ secrets.X }}', '    type: List<T>', '    [gone](./nope.md)', `    ${FENCE}`, '', '2. Done.'].join('\n')
+  assert.deepEqual(run(fixture(t, usage(text))).errors, [])
+  const scan = lib.createFenceScanner()
+  const kinds = ['- item', `      ${FENCE}js`, 'code', `      ${FENCE}`, 'text', `${FENCE}npm test${FENCE} runs`, `        ${FENCE}js`].map((l) => scan(l).kind)
+  assert.deepEqual(kinds, ['text', 'open', 'code', 'close', 'text', 'text', 'text'])
+})
+
+test('{{ }} is live in a fence whose language ends in -vue', (t) => {
+  assert.deepEqual(rules(run(fixture(t, usage(`${FENCE}js-vue\nconst a = {{ value }}\n${FENCE}`)))), ['interpolation'])
+  assert.deepEqual(run(fixture(t, usage(`${FENCE}js\nconst a = {{ value }}\n${FENCE}`))).errors, [])
+})
+
+test('quoted frontmatter is read as YAML reads it', (t) => {
+  const issue = (title) => lib.parseFrontmatter(`---\ntitle: ${title}\ndescription: x\n---\n`).issues[0]?.problem ?? null
+  assert.match(issue('"Path C:\\Users\\x"'), /invalid escape "\\U"/)
+  assert.match(issue('"Matches \\d+ digits"'), /invalid escape "\\d"/)
+  assert.match(issue('"He said "hi" there"'), /text after its closing quote/)
+  assert.match(issue("'it's'"), /text after its closing quote/)
+  assert.match(issue('"never closed'), /unbalanced quote/)
+  for (const fine of ['"A" # a comment', '"Path C:\\\\Users\\\\x"', '"He said \\"hi\\""', "'it''s'", '"Tab\\there and \\u00e9"']) assert.equal(issue(fine), null, fine)
+  const data = lib.parseFrontmatter(`---\ntitle: "A \\"b\\" \\\\ c" # note\ndescription: 'it''s'\n---\n`).data
+  assert.deepEqual(data, { title: 'A "b" \\ c', description: "it's" })
+  const page = goodPage('Usage').replace('title: Usage', 'title: "C:\\Users"')
+  assert.deepEqual(rules(run(fixture(t, { '01-getting-started/usage.md': page }))), ['frontmatter'])
+})
+
+test('light fills in rgb() and hsl() notation are errors too', (t) => {
+  const block = diagram('flowchart TD', '  A --> B', '  style A fill:rgb(255, 255, 255)', '  style B fill:hsl(210, 40%, 92%)', '  style A fill:rgb(45,51,59),stroke:hsl(0, 0%, 95%)')
+  const result = run(fixture(t, usage(block)))
+  assert.deepEqual(rules(result), ['mermaid', 'mermaid'])
+  assert.match(messages(result), /fill:rgb\(255, 255, 255\) is a light-mode color/)
+})
+
+test('figure and its relatives are allowed HTML', (t) => {
+  assert.deepEqual(run(fixture(t, usage('<figure>x<figcaption>cap</figcaption></figure> long<wbr>word'))).errors, [])
+  assert.ok(lib.HTML_TAGS.has('tfoot') && lib.HTML_TAGS.has('caption'))
+})
+
+test('catalogue folders must be safe, unique, and inside the wiki', (t) => {
+  const section = (dir, extra = {}) => ({ title: dir.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x', name: 'Sec', dir, children: [leaf('setup', { path: `${dir}/setup.md` })], ...extra })
+  const only = (...items) => messages(run(fixture(t, {}, { catalogue: { project: 'D', summary: 's', items } }), { catalogueOnly: true }))
+  assert.match(only(section('../outside')), /must stay inside the wiki/)
+  assert.match(only(section('01-a/../../x')), /must stay inside the wiki/)
+  assert.match(only(section('01-a/dist')), /folder "dist" is reserved/)
+  assert.match(only(section('01-a/Scripts_Old')), /must be lowercase kebab-case/)
+  assert.match(only(section('01-a'), { ...section('01-a'), title: 'again' }), /dir 01-a is used by two sections/)
+  assert.match(only(section('01-a', { name: 'Core <Api>' })), /name must not contain <, >, \{\{ or \}\}/)
+  assert.match(only(section('01-a', { description: 'Uses {{ x }}' })), /description must not contain/)
+  assert.equal(only(section('01-a', { description: 'Fine.' }), section('02-b/deep-er')), '')
+})
+
+test('--site does not check the catalogue at all', (t) => {
+  const broken = { project: 'D', summary: 's', items: [{ title: 'Bad Title', name: 'Core <Api>', dir: 'guide', children: [] }] }
+  assert.deepEqual(run(fixture(t, {}, { catalogue: broken }), { site: true }).errors, [])
+  assert.deepEqual(run(fixture(t, { 'catalogue.json': '{ not json' }), { site: true }).errors, [])
+  assert.ok(run(fixture(t, {}, { catalogue: broken })).errors.length > 0)
+})
+
+test('--pending skips the llms checks, which only make sense once every page exists', (t) => {
+  const f = fixture(t, { 'llms-full.txt': '# Demo\n<!-- generated by deep-wiki -->\n' })
+  assert.deepEqual(rules(run(f)), ['llms'])
+  assert.deepEqual(run(f, { pending: true }).errors, [])
+})
+
+test('the site config is authoritative for the repository URL, branch, and base', (t) => {
+  const config = ["const BASE = '/from-config/'", "const REPO_URL = 'https://github.com/o/r'", 'const BRANCH = "main" // default branch', ''].join('\n')
+  const f = fixture(t, { '.vitepress/config.mts': config, ...withState({ repoUrl: 'https://github.com/old/name', branch: 'old', base: '/old/', host: 'github' }) })
+  assert.deepEqual(lib.resolveSite(f.wiki), { hasSite: true, base: '/from-config/', repoUrl: REPO_URL, branch: 'main', host: 'github' })
+  // A constant someone turned into an expression falls back to the state file.
+  fs.writeFileSync(path.join(f.wiki, '.vitepress/config.mts'), config.replace("const BASE = '/from-config/'", "const BASE = process.env.BASE ?? '/'"))
+  assert.equal(lib.resolveSite(f.wiki).base, '/old/')
+  // No config: no site, and the state file is all there is.
+  fs.rmSync(path.join(f.wiki, '.vitepress'), { recursive: true })
+  assert.deepEqual(lib.resolveSite(f.wiki), { hasSite: false, base: '/old/', repoUrl: 'https://github.com/old/name', branch: 'old', host: 'github' })
+  assert.equal(lib.inferHost('https://bitbucket.org/a/b'), 'local')
+})
+
+test('the cited-file minimum never exceeds the number of source files', (t) => {
+  const two = goodPage('Usage').replace(/ \(src\/[cde]\.ts:1-3\)/g, '')
+  const pages = { '01-getting-started/usage.md': two, '01-getting-started/setup.md': null, 'index.md': `${frontmatter('Demo')}\n# Demo\n` }
+  const f = fixture(t, pages, { catalogue: catalogueOf(leaf('usage')) })
+  assert.match(messages(run(f)), /cites 2 distinct source file\(s\); a full page needs at least 5/)
+  for (const n of ['c', 'd', 'e']) fs.rmSync(path.join(f.repo, `src/${n}.ts`))
+  assert.deepEqual(run(f).errors, [])
+  assert.equal(lib.countSourceFiles(f.repo, f.wiki), 2)
+})
+
+test('a page may declare crisp depth for itself in a full wiki', (t) => {
+  const crisp = `---\ntitle: Usage\ndescription: A crisp page.\ndepth: crisp\n---\n\n# Usage\n\n(src/a.ts:1) (src/b.ts:1) (src/c.ts:1)\n\n${diagram('flowchart TD', '  A --> B')}`
+  assert.deepEqual(run(fixture(t, { '01-getting-started/usage.md': crisp })).errors, [])
+  assert.equal(rules(run(fixture(t, { '01-getting-started/usage.md': crisp.replace('depth: crisp\n', '') }))).filter((r) => r === 'threshold').length, 3)
+})
+
+test('only the four named guides get onboarding minimums', (t) => {
+  const empty = `${frontmatter('Notes')}\n# Notes\n`
+  const result = run(fixture(t, { 'onboarding/notes.md': empty, 'onboarding/deep/contributor-guide.md': empty }))
+  assert.deepEqual(result.errors, [])
+})
+
+test('local wikis keep full paths in tables; one-dash delimiter rows are tables too', (t) => {
+  const long = '(src/main/java/com/example/project/module/submodule/VeryLongServiceImplementationName.java:120-180)'
+  const table = `| File | Source |\n|-|-|\n| Service | ${long} |`
+  const wide = '| A | B | C | D | E | F |\n|:-|-|-:|-|-|-|\n| 1 | 2 | 3 | 4 | 5 | 6 |'
+  const local = run(fixture(t, { ...usage(`${table}\n\n${wide}`), ...withState({ host: 'local' }) }), { source: false })
+  assert.deepEqual(local.warnings.map((w) => w.message.slice(0, 9)), ['6 columns'])
+  const hosted = run(fixture(t, { ...usage(table), ...withState({ host: 'github', repoUrl: REPO_URL, branch: 'main' }) }), { source: false })
+  assert.match(messages(hosted, 'warnings'), /unbreakable 99-character cell text/)
+})
+
+test('the marker counts only where the generators put it', () => {
+  assert.equal(lib.isMarked(`---\ntitle: a\n---\n\n# T\n${lib.MARKER}\n\nText.\n`), true)
+  assert.equal(lib.isMarked(`# T\n${lib.MARKER}\n`), true)
+  assert.equal(lib.isMarked(`# T\n\none\n\ntwo\n\nthree\n\nfour\n\nThis wiki writes \`${lib.MARKER}\` into files.\n\n${lib.MARKER}\n`), false)
+})
+
+test('command-line values: one wiki folder, no URL spelled three ways', () => {
+  assert.throws(() => parseArgs(['wiki', 'other']), UsageError)
+  assert.equal(parseArgs(['wiki', '--repo-url', '']).repoUrl, '')
+  assert.equal(parseArgs(['wiki', '--repo-url', 'none']).repoUrl, '')
+  assert.equal(parseArgs(['wiki', "--repo-url=''"]).repoUrl, '')
+  assert.equal(parseArgs(['--repo-url', 'https://github.com/o/r.git/']).repoUrl, 'https://github.com/o/r')
+  assert.throws(() => parseArgs(['--branch', '']), UsageError)
+  assert.equal(parseArgs([]).wikiDir, '.')
+  assert.equal(slugify('A &amp; B'), 'a-b')
+})
+
+test('the leftover check knows the llms input file and works when the wiki is the repository root', (t) => {
+  const f = fixture(t)
+  const gitIn = (dir, ...args) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], { stdio: 'ignore' })
+  try {
+    gitIn(f.wiki, 'init', '-q')
+  } catch {
+    return t.skip('git is not available')
+  }
+  const baseline = path.join(f.wiki, '.vitepress', 'cache', 'baseline.txt')
+  assert.equal(cli(f.wiki, '--write-baseline', baseline).status, 0)
+  fs.writeFileSync(path.join(f.wiki, '.deep-wiki-llms.json'), '{}')
+  fs.writeFileSync(path.join(f.wiki, '01-getting-started/extra.md'), goodPage('Extra'))
+  fs.writeFileSync(path.join(f.wiki, 'scratch.log'), 'x')
+  const left = checkWiki({ wikiDir: f.wiki, repo: f.wiki, baseline, source: false }).warnings.filter((w) => w.rule === 'leftover')
+  assert.deepEqual(left.map((w) => w.file), ['scratch.log'])
+})
+
+test('the leftover check works when --repo is a folder inside the git repository', (t) => {
+  const f = fixture(t)
+  const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outer-'))
+  t.after(() => fs.rmSync(outer, { recursive: true, force: true }))
+  const project = path.join(outer, 'proj')
+  fs.cpSync(f.repo, project, { recursive: true })
+  try {
+    execFileSync('git', ['-C', outer, 'init', '-q'], { stdio: 'ignore' })
+  } catch {
+    return t.skip('git is not available')
+  }
+  const wiki = path.join(project, 'wiki')
+  const baseline = path.join(wiki, '.vitepress', 'cache', 'baseline.txt')
+  assert.equal(cli(wiki, '--repo', project, '--write-baseline', baseline).status, 0)
+  fs.writeFileSync(path.join(wiki, '.deep-wiki-llms.json'), '{}')
+  fs.writeFileSync(path.join(project, 'testResults.xml'), '<x/>')
+  const left = checkWiki({ wikiDir: wiki, repo: project, baseline }).warnings.filter((w) => w.rule === 'leftover')
+  assert.deepEqual(left.map((w) => w.file), ['proj/testResults.xml'])
 })

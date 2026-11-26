@@ -18,8 +18,9 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 | Input | Meaning |
 |-------|---------|
 | Repository context | `REPO_URL`, `HOST`, `BRANCH` |
-| Focus (optional) | A subsystem or folder ("only the pwsh app"), or a constraint ("max 10 pages"). Catalogue only what the focus names, in the depth it asks for. Without a focus, cover the whole repository. When a focus is given and `wiki/catalogue.json` already exists, keep every node outside the focus unchanged and add or replace only the focus's sections. |
-| Write mode | Naming the catalogue as the target replaces an existing `wiki/catalogue.json`. |
+| Focus (optional) | A subsystem or folder ("only the pwsh app"). Catalogue only what the focus names. When `wiki/catalogue.json` already exists, keep every node outside the focus unchanged and add or replace only the focus's sections, then report the page paths you added or changed. Without a focus, cover the whole repository. |
+| Constraint (optional) | A limit on the whole catalogue ("at most 10 pages", "two levels only"). Apply it at the level of detail it asks for; it does not narrow the scope. |
+| Existing catalogue | You were asked to write `wiki/catalogue.json`, so replace it (or, with a focus, merge into it). |
 
 ## Procedure
 
@@ -58,9 +59,9 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 | Field | Rule |
 |-------|------|
 | `title` | kebab-case slug, unique among siblings |
-| `name` | Display name taken from the code, never a placeholder. At most 60 characters, no `<`, `>`, `{{`: it is the sidebar label and the page title |
-| `dir` | Section nodes only: the folder relative to `wiki/`. Top level is `NN-slug`, numbered in reading order; a nested section is `NN-slug/sub-slug` |
-| `description` | Section nodes only: one sentence on what the section covers. It becomes the introduction of the section's generated `index.md` |
+| `name` | Display name taken from the code, never a placeholder. At most 60 characters, no `<`, `>`, `{{`, or `}}`: it is the sidebar label and the page title |
+| `dir` | Section nodes only: the folder relative to `wiki/`. Top level is `NN-slug`, numbered in reading order; a nested section is `NN-slug/sub-slug`. No `..` segments, and no folder named `dist` or `node_modules` |
+| `description` | Section nodes only: one sentence on what the section covers, with no `<`, `>`, `{{`, or `}}`. It becomes the introduction of the section's generated `index.md` |
 | `path` | Page nodes only: the page file relative to `wiki/`, inside its parent section's `dir` |
 | `prompt` | Page nodes only: 1–3 sentences naming the files the writer must read and what to explain. Name files and symbols by their real paths. Add a line range only for a file you opened and read; never take line numbers from search output |
 | `minFiles` | Page nodes only, optional: an integer from 2 to 4. Set it only when the topic genuinely has fewer than 5 source files; it lowers that page's citation minimum |
@@ -72,7 +73,7 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 - Max depth 4; max 8 children per node.
 - A node has `dir` or `path`, never both. Never add an `index.md` page: section indexes are generated from the catalogue.
 - Every page `prompt` names at least 5 real files (the writer must cite 5), or the page sets `minFiles`. Never reference a file you have not seen in the scan.
-- Small repos (≤ 10 source files): Getting Started only, with 1–3 pages, each with `minFiles` as needed.
+- Small repos (≤ 10 source files): Getting Started only, with 1–3 pages, each with `minFiles` as needed. The checker never asks a page to cite more files than the repository has.
 - Split a page when its prompt would need more than ~15 files; merge pages that would cite the same handful of files.
 - Describe what the code does now. Check each term in a `name` or `prompt` against the current source, not against a README, comment, or commit message that may be out of date.
 
@@ -80,3 +81,4 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 
 1. `wiki/catalogue.json`.
 2. A short summary table for the caller: `Section | Pages | Key files`, with the counts the checker printed (or counted from the written file when the checker is not installed).
+3. With a focus: the list of page paths you added or changed.

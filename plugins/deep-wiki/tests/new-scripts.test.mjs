@@ -11,7 +11,8 @@ const scripts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../s
 const { checkWiki } = await import(pathToFileURL(path.join(scripts, 'check-wiki.mjs')).href)
 const { initWiki } = await import(pathToFileURL(path.join(scripts, 'init-wiki.mjs')).href)
 const { genLlms } = await import(pathToFileURL(path.join(scripts, 'gen-llms.mjs')).href)
-const { MARKER, readConfigConst } = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
+const lib = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
+const { MARKER, readConfigConst } = lib
 
 /** A throwaway repository folder, removed when the test ends. `files` maps repo-relative path to text. */
 function repo(t, files = {}) {
@@ -258,6 +259,9 @@ test('an unmarked root llms.txt is kept unless --force', (t) => {
 
 test('without a site only the root and wiki files are written', (t) => {
   const dir = repo(t, wikiFiles())
+  // Scripts and a state file with a recorded base do not make a site: only config.mts does.
+  initWiki({ wikiDir: path.join(dir, 'wiki'), repo: dir, scriptsOnly: true, base: 'r', ...FLAGS })
+  assert.equal(JSON.parse(read(dir, 'wiki/.deep-wiki.json')).base, '/r/')
   const result = genLlms({ wikiDir: path.join(dir, 'wiki'), repo: dir })
   assert.deepEqual(result.files.map((f) => f.path), ['llms.txt', 'wiki/llms.txt', 'wiki/llms-full.txt'])
   assert.ok(!exists(dir, 'wiki/public'))
@@ -288,6 +292,145 @@ test('an over-budget wiki stays under 5 KB and keeps every page in llms-full', (
   assert.match(read(wiki, 'llms.txt'), /## Big\n\n- \[Big\]\(\.\/02-big\/index\.md\)/)
   assert.equal((read(wiki, 'llms-full.txt').match(/^<doc /gm) ?? []).length, 67)
   assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })).filter((f) => f.level === 'error'), [])
+})
+
+// ---------------------------------------------------------------------------
+// Round two
+// ---------------------------------------------------------------------------
+const initCli = (...args) => spawnSync(process.execPath, [path.join(scripts, 'init-wiki.mjs'), ...args], { encoding: 'utf8' })
+const llmsCli = (...args) => spawnSync(process.execPath, [path.join(scripts, 'gen-llms.mjs'), ...args], { encoding: 'utf8' })
+
+test('a kept config.mts takes a new base, URL, and branch, and keeps its title', (t) => {
+  const dir = repo(t)
+  const wiki = path.join(dir, 'wiki')
+  init(dir)
+  const again = init(dir, { title: 'Other', description: 'Other.', base: 'docs', branch: 'trunk', repoUrl: 'https://github.com/o/new.git' })
+  assert.equal(action(again, '.vitepress/config.mts'), 'updated')
+  assert.equal(readConfigConst(wiki, 'SITE_TITLE'), 'Demo')
+  assert.equal(readConfigConst(wiki, 'SITE_DESCRIPTION'), 'A demo project.')
+  assert.equal(readConfigConst(wiki, 'BASE'), '/docs/')
+  assert.equal(readConfigConst(wiki, 'BRANCH'), 'trunk')
+  assert.equal(readConfigConst(wiki, 'REPO_URL'), 'https://github.com/o/new')
+  assert.ok(again.notes.some((n) => /kept the title and description already in/.test(n)))
+  assert.deepEqual([again.state.base, again.state.branch, again.state.repoUrl], ['/docs/', 'trunk', 'https://github.com/o/new'])
+
+  // --scripts-only patches the same three constants.
+  initWiki({ wikiDir: wiki, repo: dir, scriptsOnly: true, branch: 'release' })
+  assert.equal(readConfigConst(wiki, 'BRANCH'), 'release')
+
+  // The state file follows a hand-edited config, whatever it recorded before.
+  const config = path.join(wiki, '.vitepress/config.mts')
+  fs.writeFileSync(config, read(wiki, '.vitepress/config.mts').replace('"/docs/"', '"/moved/"'))
+  assert.equal(initWiki({ wikiDir: wiki, repo: dir, scriptsOnly: true }).state.base, '/moved/')
+
+  // A constant turned into an expression is reported and skipped; the rest of the run still happens.
+  fs.writeFileSync(config, read(wiki, '.vitepress/config.mts').replace('const BASE = "/moved/"', "const BASE = process.env.DOCS_BASE ?? '/'"))
+  fs.writeFileSync(path.join(wiki, 'scripts/lib.mjs'), '// stale')
+  const custom = init(dir, { base: 'x', branch: 'next' })
+  assert.equal(action(custom, '.vitepress/config.mts (BASE)'), 'kept (custom)')
+  assert.match(read(wiki, '.vitepress/config.mts'), /const BASE = process\.env\.DOCS_BASE/)
+  assert.equal(readConfigConst(wiki, 'BRANCH'), 'next')
+  assert.equal(action(custom, 'scripts/lib.mjs'), 'replaced')
+  assert.equal(custom.state.branch, 'next')
+})
+
+test('--base takes a name or root, and refuses a path the shell made of it', (t) => {
+  const dir = repo(t)
+  const wiki = path.join(dir, 'wiki')
+  const flags = ['--repo', dir, '--title', 'T', '--description', 'D', '--repo-url', 'none']
+  // What Git Bash on Windows turns "--base /my-repo/" into.
+  const mangled = initCli(wiki, ...flags, '--base', 'C:/Program Files/Git/my-repo/')
+  assert.equal(mangled.status, 2)
+  assert.match(mangled.stderr, /Pass the name without slashes \(--base my-repo\)/)
+  assert.ok(!fs.existsSync(wiki), 'nothing is written when a flag is bad')
+  assert.equal(initCli(wiki, ...flags, '--base', 'my-repo', '--json').status, 0)
+  assert.equal(readConfigConst(wiki, 'BASE'), '/my-repo/')
+  assert.equal(JSON.parse(read(wiki, '.deep-wiki.json')).host, 'local')
+  assert.equal(JSON.parse(read(wiki, '.deep-wiki.json')).repoUrl, '')
+  assert.equal(initCli(wiki, '--repo', dir, '--base', 'root').status, 0)
+  assert.equal(readConfigConst(wiki, 'BASE'), '/')
+  assert.equal(JSON.parse(read(wiki, '.deep-wiki.json')).base, '/')
+  // A value option must not swallow the next flag, and there is one wiki folder.
+  assert.equal(initCli(wiki, '--title', '--description', 'x').status, 2)
+  assert.equal(initCli(wiki, 'other').status, 2)
+})
+
+test('gen-llms reads .deep-wiki-llms.json when no --input is given', (t) => {
+  const dir = repo(t, { ...wikiFiles(), 'wiki/.deep-wiki-llms.json': JSON.stringify({ summary: 'From the default file.' }) })
+  const result = genLlms({ wikiDir: path.join(dir, 'wiki'), repo: dir })
+  assert.match(read(dir, 'wiki/llms.txt'), /\n> From the default file\.\n/)
+  assert.ok(result.notes.some((n) => /read the summary and descriptions from \.deep-wiki-llms\.json/.test(n)))
+  // An explicit --input still wins.
+  fs.writeFileSync(path.join(dir, 'other.json'), JSON.stringify({ summary: 'Explicit.' }))
+  genLlms({ wikiDir: path.join(dir, 'wiki'), repo: dir, input: path.join(dir, 'other.json') })
+  assert.match(read(dir, 'wiki/llms.txt'), /\n> Explicit\.\n/)
+  assert.equal(llmsCli(path.join(dir, 'wiki'), 'extra').status, 2)
+  assert.equal(llmsCli(path.join(dir, 'wiki'), '--input', '--force').status, 2)
+})
+
+test('llms-full survives awkward titles, code in link labels, root links, and fences in lists', (t) => {
+  const FENCE = '```'
+  const body = ['See [`AlphaService`](./alpha.md), ![logo](/logo.svg), [old](./alpha.html) and [home](/).', '', '1. Step:', '', `    ${FENCE}md`, '    [not a link](./nope.md)', `    ${FENCE}`].join('\n')
+  const dir = repo(t, { ...wikiFiles(), 'wiki/01-core/beta.md': page('Request -> Response & "more"', 'What beta does.', body), 'wiki/public/logo.svg': '<svg/>' })
+  const wiki = path.join(dir, 'wiki')
+  init(dir, { base: 'r' })
+  genLlms({ wikiDir: wiki, repo: dir })
+  const full = read(wiki, 'llms-full.txt')
+  assert.ok(full.includes('<doc title="Request -&gt; Response &amp; &quot;more&quot;" path="01-core/beta.md">'))
+  assert.ok(full.includes('[`AlphaService`](./01-core/alpha.md), ![logo](/logo.svg), [old](./01-core/alpha.md) and [home](/).'))
+  assert.ok(full.includes('    [not a link](./nope.md)'))
+  const site = read(wiki, 'public/llms-full.txt')
+  assert.ok(site.includes('[`AlphaService`](/r/01-core/alpha), ![logo](/r/logo.svg), [old](/r/01-core/alpha) and [home](/r/).'))
+  assert.ok(site.includes('    [not a link](./nope.md)'))
+  assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })), [])
+})
+
+test('sections that share a name with each other or a built-in heading stay apart', (t) => {
+  const files = wikiFiles()
+  const long = 'This page explains the subsystem in considerable detail. '.repeat(4).trim()
+  const items = [...CATALOGUE.items]
+  for (const [n, name] of [['02', 'Start Here'], ['03', 'More'], ['04', 'Optional'], ['05', 'More']]) {
+    const dir = `${n}-sec`
+    const children = []
+    for (let i = 0; i < 12; i++) {
+      children.push({ title: `p${i}`, name: `P${i}`, path: `${dir}/p${i}.md`, prompt: 'Read src/a.ts and src/b.ts.', children: [] })
+      files[`wiki/${dir}/p${i}.md`] = page(`${name} page ${i}`, long)
+    }
+    files[`wiki/${dir}/index.md`] = page(name, 'Section.')
+    items.push({ title: `sec-${n}`, name, dir, children })
+  }
+  files['wiki/changelog.md'] = page('Changelog', 'What changed.')
+  files['wiki/catalogue.json'] = JSON.stringify({ ...CATALOGUE, items })
+  const dir = repo(t, files)
+  const wiki = path.join(dir, 'wiki')
+  init(dir, { base: 'r' })
+  // Over budget with same-named sections: this used to collapse a built-in section and crash.
+  const result = genLlms({ wikiDir: wiki, repo: dir })
+  assert.ok(result.notes.some((n) => /over 5 KB/.test(n)))
+  for (const rel of ['llms.txt', 'wiki/llms.txt', 'wiki/public/llms.txt']) assert.ok(Buffer.byteLength(read(dir, rel)) <= 5 * 1024, rel)
+  const headings = [...read(wiki, 'llms-full.txt').matchAll(/^## (.+)$/gm)].map((m) => m[1])
+  assert.equal(new Set(headings).size, headings.length, headings.join(' | '))
+  for (const expected of ['Landing Page', 'Start Here', 'More', 'More (2)', 'Optional (2)', 'Other Pages']) assert.ok(headings.includes(expected), expected)
+  assert.ok(!headings.includes('Optional'))
+  assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })).filter((f) => f.level === 'error'), [])
+})
+
+test('the root llms.txt goes where the state file says, and nowhere when nothing says', (t) => {
+  const { gitTopLevel } = lib
+  const files = Object.fromEntries(Object.entries(wikiFiles()).map(([rel, text]) => [rel.replace(/^wiki\//, 'docs/wiki/'), text]))
+  const dir = repo(t, files)
+  if (gitTopLevel(dir)) return t.skip('the temp folder is inside a git repository')
+  const wiki = path.join(dir, 'docs/wiki')
+  const unknown = genLlms({ wikiDir: wiki })
+  assert.ok(unknown.notes.some((n) => /no repository root is known/.test(n)))
+  assert.ok(!exists(dir, 'docs/llms.txt') && !exists(dir, 'llms.txt'), 'the parent folder is never guessed')
+  assert.deepEqual(unknown.files.map((f) => f.path), ['wiki/llms.txt', 'wiki/llms-full.txt'])
+
+  fs.writeFileSync(path.join(wiki, '.deep-wiki.json'), JSON.stringify({ wikiDir: 'docs/wiki' }))
+  const recorded = genLlms({ wikiDir: wiki })
+  assert.equal(recorded.files[0].path, 'llms.txt')
+  assert.match(read(dir, 'llms.txt'), /\(\.\/docs\/wiki\/01-core\/alpha\.md\)/)
+  assert.ok(!exists(dir, 'docs/llms.txt'))
 })
 
 test('the checker catches stale and hand-written llms copies', (t) => {

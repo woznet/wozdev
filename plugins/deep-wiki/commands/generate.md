@@ -13,42 +13,55 @@ Load `deep-wiki:wiki-conventions` and `deep-wiki:wiki-vitepress` first. The conv
 - **The source repository is read-only** (conventions section 9).
 - **Nothing is deleted without showing the paths and getting a yes.**
 
-Run every command from the repository root.
+Run every command from the repository root, in the forms conventions section 10 gives.
 
 ## Step 0: Context, Write Mode, Tools
 
-1. Run `node --version`. Below 22.12, stop and tell the user.
+1. Check Node (conventions section 10). Below 22.12, stop and tell the user.
 2. Resolve `REPO_URL`, `HOST`, and `BRANCH` (conventions section 1).
 3. Decide the write mode:
-   - `wiki/` has no pages and no `catalogue.json`: `fill-missing`, no question. Existing `AGENTS.md`, `CLAUDE.md`, and root `llms.txt` files are kept.
-   - Otherwise ask once: **regenerate**, **fill missing** (keeps the existing catalogue and pages, writes what is absent), or **stop**. In the regenerate option, say that pages and the site scaffold (config, theme) are replaced with the base path kept, and that sections missing from the new catalogue will be listed for deletion later. If unmarked `AGENTS.md` / `CLAUDE.md` files exist, list them in the same question and ask whether to replace or keep them.
+
+   | Situation | Write mode |
+   |-----------|------------|
+   | `wiki/` has no pages and no `catalogue.json` | `fill-missing`, no question |
+   | A focus argument was given | `fill-missing`, no question. The focus's pages are named targets (Steps 1 and 2) |
+   | Anything else | Ask once: **regenerate**, **fill missing**, or **stop** |
+
+   In the question:
+   - **Regenerate** replaces every page and the site scaffold (`config.mts`, theme, `package.json`, `.gitignore`, logo; the base path is kept). Sections missing from the new catalogue are listed for deletion later.
+   - **Fill missing** keeps the existing catalogue and pages and writes what is absent.
+   - If unmarked `AGENTS.md`, `CLAUDE.md`, or root `llms.txt` files exist, list them and ask whether regenerate should replace or keep them.
+   - If `wiki/.deep-wiki.json` records depth `crisp`, say this is a crisp wiki and recommend regenerate: with fill missing, the crisp pages stay and are reported as under the full minimums.
 4. Apply conventions section 8 for that write mode in every step. Do not restate or widen it.
-5. Install the scripts and record the run state:
-
-   ```bash
-   node <vitepress skill dir>/templates/scripts/init-wiki.mjs wiki --scripts-only --depth full --host <HOST> --repo-url "<REPO_URL or ''>" --branch "<BRANCH>"
-   ```
-
+5. Run the bootstrap command from conventions section 10 with `--depth full`, `--host`, `--repo-url`, and `--branch`.
 6. In a git repository, save the starting state: `node wiki/scripts/check-wiki.mjs wiki --write-baseline wiki/.vitepress/cache/deep-wiki-baseline.txt`.
 
 ## Step 1: Catalogue
 
-1. Dispatch `deep-wiki:wiki-architect` (conventions section 11) with any focus from the arguments. In `fill-missing`, if `wiki/catalogue.json` exists, skip the architect and use that file.
-2. Run `node wiki/scripts/check-wiki.mjs wiki --catalogue-only`. Fix errors in the file yourself; re-dispatch the architect only if the file is missing or unparseable. Use the counts the checker prints.
-3. Show the user the section summary. Above 40 pages, confirm before continuing.
+1. Dispatch `deep-wiki:wiki-architect` (conventions section 11) when there is no `wiki/catalogue.json`, when the write mode is `regenerate`, or when a focus was given (the architect merges the focus into an existing catalogue and returns the pages it added or changed). In `fill-missing` with an existing catalogue and no focus, skip the architect.
+2. Run `node wiki/scripts/check-wiki.mjs wiki --catalogue-only`. Fix errors in the file yourself. Re-dispatch the architect only if the file is missing or unparseable, and only once; if it fails again, stop and report. Use the counts the checker prints.
+3. Show the user the section summary. Above 40 pages to write, confirm before continuing.
 
 ## Step 2: Pages
 
-1. Dispatch `deep-wiki:wiki-writer` subagents for the catalogue pages, as conventions section 11 describes: depth `full`, output paths as `wiki/<path>`, the full sibling list, up to 3 pages of one section per writer, at most 5 writers at a time. In `fill-missing`, only for pages that do not exist.
-2. `regenerate` without a focus argument only: run `node wiki/scripts/check-wiki.mjs wiki --pending` and collect the `catalogue-drift` warnings (stale folders, pages, and indexes). Show the exact paths and ask. Delete only what the user confirms. With a focus argument, delete nothing.
-3. Run `node wiki/scripts/gen-section-indexes.mjs wiki` (in `regenerate`: add `--force`, and `--prune` if the user confirmed the stale indexes).
-4. Run `node wiki/scripts/check-wiki.mjs wiki --pending`.
-5. For each catalogue page with errors, dispatch one repair task (conventions section 11), once. In `fill-missing`, repair only pages written in this run and report the rest. Fix what remains yourself.
-6. Rerun step 3 if any page's title or description changed.
+1. Dispatch `deep-wiki:wiki-writer` page tasks as conventions section 11 describes: depth `full`, output paths as `wiki/<path>`, the full sibling list, up to 3 pages of one section per writer, at most 5 writers at a time. Which pages:
+
+   | Run | Pages |
+   |-----|-------|
+   | `regenerate` | Every catalogue page |
+   | `fill-missing` | Catalogue pages that do not exist |
+   | With a focus | The pages the architect added or changed, whether or not they exist |
+
+2. If a writer returns without having written a page, dispatch that page once more as a page task. If it is still missing, write it yourself.
+3. `regenerate` only: run `node wiki/scripts/check-wiki.mjs wiki --pending` and collect the `catalogue-drift` warnings (stale folders, pages, and indexes). Show the exact paths and ask. Delete only what the user confirms. Pages the user keeps are reported, not fixed (conventions section 8).
+4. Run `node wiki/scripts/gen-section-indexes.mjs wiki` (in `regenerate`: add `--force`, and `--prune` if the user confirmed the stale indexes).
+5. Run `node wiki/scripts/check-wiki.mjs wiki --pending`. It skips the llms checks and accepts links to the landing page and onboarding pages, which do not exist yet.
+6. For each page written in this run that has errors, dispatch one repair task (conventions section 11), once. Fix what remains yourself. Report errors in pages this run did not write.
 
 ## Step 3: Onboarding
 
-Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, each with the onboarding task form (conventions section 11): load `deep-wiki:wiki-onboarding` and write `wiki/onboarding/<guide>.md`. The four guides are `contributor-guide.md`, `staff-engineer-guide.md`, `executive-guide.md`, and `product-manager-guide.md`. In `fill-missing`, only the missing ones. Do not write `onboarding/index.md`; Step 7 generates it.
+1. Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, each with the onboarding task form (conventions section 11): load `deep-wiki:wiki-onboarding` and write `wiki/onboarding/<guide>.md`. The four guides are `contributor-guide.md`, `staff-engineer-guide.md`, `executive-guide.md`, and `product-manager-guide.md`. In `fill-missing`, only the missing ones. With a focus, skip this step if the guides exist.
+2. Run `node wiki/scripts/gen-section-indexes.mjs wiki` again (with `--force` in `regenerate`). It writes `onboarding/index.md` and refreshes the section indexes after the Step 2 repairs. Never write the hub by hand.
 
 ## Step 4: Site
 
@@ -56,29 +69,30 @@ Follow `deep-wiki:wiki-vitepress` Steps 1 and 2 only: run `init-wiki.mjs` with t
 
 ## Step 5: AGENTS.md
 
-Follow `deep-wiki:wiki-agents-md` for the repository root and `wiki/`.
+Follow `deep-wiki:wiki-agents-md` for the repository root and `wiki/`. Step 6 will write the llms files, so its Documentation section may list them.
 
 ## Step 6: llms.txt
 
-Follow `deep-wiki:wiki-llms-txt`. It runs after every page exists and before the build.
+Follow `deep-wiki:wiki-llms-txt`. Every page, the hub, and the landing page exist by now.
 
 ## Step 7: Check, Leftovers, Build
 
-1. Run `node wiki/scripts/gen-section-indexes.mjs wiki` (with `--force` in `regenerate`).
-2. Run `node wiki/scripts/check-wiki.mjs wiki --baseline wiki/.vitepress/cache/deep-wiki-baseline.txt` (omit `--baseline` outside git). Fix every error at its source and rerun. Fix the warnings you can. In `fill-missing`, errors in pages that existed before the run are reported, not fixed.
+1. Run `node wiki/scripts/check-wiki.mjs wiki --baseline wiki/.vitepress/cache/deep-wiki-baseline.txt` (omit `--baseline` outside git). Fix every error at its source in pages this run wrote, then rerun. Fix the warnings you can. Report errors in pages this run did not write.
+2. If a fix changed any page, rerun `node wiki/scripts/gen-llms.mjs wiki`; if it changed a title or description, rerun the `gen-section-indexes` command from Step 3 first. Then rerun the check.
 3. `leftover` warnings name files that appeared or changed in the repository during the run. List them and ask the user what to do. Delete nothing on your own.
-4. Unless the arguments contain `--no-build`: `npm --prefix wiki install`, then `npm --prefix wiki run build`. Fix any build error at its source page and rebuild. Confirm `wiki/.vitepress/dist/llms.txt` exists.
+4. Unless the arguments contain `--no-build`: `npm --prefix wiki install`, then `npm --prefix wiki run build`. Fix a build error at its source page and rebuild. If the failing page is one the user chose to keep or that existed before a `fill-missing` run, tell the user which page and stop. Confirm `wiki/.vitepress/dist/llms.txt` exists.
 
 ## Step 8: Report
 
 1. The table from `node wiki/scripts/check-wiki.mjs wiki --report`.
-2. The checker's summary line, and any warnings left in place with the reason.
+2. The checker's summary line, and any findings left in place with the reason.
 3. Files created, replaced, deleted, and skipped.
 4. The build result, or "build skipped".
-5. Next steps: `npm --prefix wiki run dev` to preview (check a few diagrams render), and `/deep-wiki:deploy` to publish to GitHub Pages.
+5. Next steps: `npm --prefix wiki run dev` to preview (check a few diagrams render). When `HOST` is `github` and the remote is on github.com, also `/deep-wiki:deploy` to publish to GitHub Pages.
 
 ## Arguments
 
-An optional focus area (a subsystem or folder) passed to the architect. `--no-build` skips `npm install` and the build.
+- **Focus area** (optional): a subsystem or folder, such as `src/api`. Only that part of the catalogue and its pages are written, and nothing is deleted. A constraint such as "at most 10 pages" is not a focus: pass it to the architect as an instruction and run as if no focus was given.
+- `--no-build` skips `npm install` and the build.
 
 $ARGUMENTS

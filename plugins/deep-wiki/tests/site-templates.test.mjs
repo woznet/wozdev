@@ -49,23 +49,88 @@ test('frontmatter text is made safe for page prose', (t) => {
       '01-core/cache.md': page('Repository<T> | Cache', 'How Repository<T> caches {{ entity }} rows | and `Map<K, V>` stays.'),
       '01-core/auth.md': page('Auth [v2]', 'Plain text.'),
     },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.equal(generate(dir).code, 0)
+  const index = read(dir, '01-core/index.md')
+  assert.ok(index.includes('| [Repository&lt;T> \\| Cache](./cache.md) | How Repository&lt;T> caches `{{ entity }}` rows \\| and `Map<K, V>` stays. |'))
+  assert.ok(index.includes('| [Auth \\[v2\\]](./auth.md) | Plain text. |'))
+
+  // The pages are at fault (the checker says so, in their own frontmatter), but the hub that
+  // lists them stays buildable: nothing in the generated file reads as a tag or an interpolation.
+  const findings = checkWiki({ wikiDir: dir, repo: dir, source: false, site: true })
+  const all = [...findings.errors, ...findings.warnings]
+  assert.deepEqual(all.filter((f) => f.file === '01-core/index.md'), [])
+  assert.ok(all.some((f) => f.file === '01-core/cache.md' && f.rule === 'bare-tag'))
+})
+
+test('a catalogue name the checker rejects is still escaped in the page body', (t) => {
+  const dir = wiki(
+    t,
+    { '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') },
     { project: 'Demo', summary: 's', items: [{ ...SECTION, name: 'Core <Api>', description: 'Uses ${{ github.ref }} and Task<string>.' }] },
   )
   assert.equal(generate(dir).code, 0)
   const index = read(dir, '01-core/index.md')
-
-  // Frontmatter keeps the raw text; the body does not.
-  assert.match(index, /^---\ntitle: "Core <Api>"\n/)
   assert.match(index, /\n# Core &lt;Api>\n/)
   assert.ok(index.includes('Uses $`{{ github.ref }}` and Task&lt;string>.'))
-  assert.ok(index.includes('| [Repository&lt;T> \\| Cache](./cache.md) | How Repository&lt;T> caches `{{ entity }}` rows \\| and `Map<K, V>` stays. |'))
-  assert.ok(index.includes('| [Auth \\[v2\\]](./auth.md) | Plain text. |'))
+  // The catalogue is where this gets fixed: the checker reports it there.
+  const report = checkWiki({ wikiDir: dir, repo: dir, source: false, catalogueOnly: true })
+  assert.deepEqual(report.errors.map((e) => e.message), ['"core": name must not contain <, >, {{ or }}', '"core": description must not contain <, >, {{ or }}'])
+})
 
-  // The checker agrees: nothing in the generated body reads as a tag or an interpolation.
-  // (It reports the raw frontmatter separately, on line 1; that text came from the catalogue.)
-  const findings = checkWiki({ wikiDir: dir, repo: dir, source: false, site: true })
-  const bad = [...findings.errors, ...findings.warnings].filter((f) => f.file === '01-core/index.md' && f.line > 4 && ['bare-tag', 'interpolation'].includes(f.rule))
-  assert.deepEqual(bad, [])
+test('brackets inside a code span in a title are left alone', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Access `items[0]` [fast]', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION] })
+  assert.equal(generate(dir).code, 0)
+  assert.ok(read(dir, '01-core/index.md').includes('| [Access `items[0]` \\[fast\\]](./cache.md) | C. |'))
+})
+
+test('a section folder outside the wiki is refused before anything is written', (t) => {
+  const outside = (dir) => ({ ...SECTION, title: 'escape', dir, children: [leaf('x', '01-core')] })
+  for (const bad of ['../outside', '01-core/../../outside', '01-core/dist']) {
+    const dir = wiki(t, { '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION, outside(bad)] })
+    const run = generate(dir, '--force')
+    assert.equal(run.code, 2, bad)
+    assert.match(run.out, /nothing was written/)
+    assert.ok(!exists(dir, '01-core/index.md'), 'the valid section is not written either')
+    assert.ok(!fs.existsSync(path.join(dir, '..', 'outside')))
+  }
+})
+
+test('--prune with a catalogue that has no sections deletes nothing', (t) => {
+  const generated = `---\ntitle: "Core"\ndescription: "C."\n---\n\n# Core\n${MARKER}\n`
+  for (const catalogue of [{}, { items: [] }, { items: 'x' }]) {
+    const dir = wiki(t, { '01-core/index.md': generated, 'catalogue.json': JSON.stringify(catalogue) })
+    const run = generate(dir, '--prune')
+    assert.equal(run.code, 2)
+    assert.match(run.out, /has no sections/)
+    assert.ok(exists(dir, '01-core/index.md'))
+  }
+})
+
+test('a hand-written page that only quotes the marker is not treated as generated', (t) => {
+  const mine = `---\ntitle: Mine\ndescription: Mine.\n---\n\n# Mine\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\nGenerated files carry \`${MARKER}\`:\n\n${MARKER}\n`
+  const dir = wiki(
+    t,
+    { '01-core/index.md': mine, '02-gone/index.md': mine, '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.match(generate(dir, '--prune').out, /skipped  01-core\/index\.md/)
+  assert.equal(read(dir, '01-core/index.md'), mine)
+  assert.ok(exists(dir, '02-gone/index.md'))
+})
+
+test('the onboarding hub lists pages only; I/O failures exit 2', (t) => {
+  const dir = wiki(t, { 'onboarding/contributor-guide.md': page('Contributor Guide', 'G.'), 'onboarding/README.md': '# readme\n', 'onboarding/AGENTS.md': '# agents\n' })
+  assert.equal(generate(dir).code, 0)
+  assert.doesNotMatch(read(dir, 'onboarding/index.md'), /README|AGENTS/)
+  // A second positional argument is a mistake, not a second wiki.
+  assert.equal(generate(dir, 'other').code, 2)
+  // index.md is a folder: the write fails, and the script says so in one line instead of a stack trace.
+  const blocked = wiki(t, { '01-core/index.md/keep.txt': 'x', '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION] })
+  const run = generate(blocked, '--force')
+  assert.equal(run.code, 2)
+  assert.doesNotMatch(run.out, /^\s+at /m)
 })
 
 test('rows follow catalogue order and the marker sits under the H1', (t) => {
