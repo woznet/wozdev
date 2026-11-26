@@ -23,7 +23,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { MARKER, ONBOARDING_ORDER, listPages, loadCatalogue, loadState, parseFrontmatter, posix, readText, walkCatalogue } from './lib.mjs'
+import { MARKER, ONBOARDING_ORDER, listPages, loadCatalogue, loadState, normalizeBase, parseFrontmatter, posix, readConfigConst, readText, walkCatalogue } from './lib.mjs'
 
 const TITLE_MAX = 60
 const TABLE_MAX_COLS = 5
@@ -266,13 +266,6 @@ function scanPage(source) {
 // ---------------------------------------------------------------------------
 // Citations
 // ---------------------------------------------------------------------------
-function readConfigConst(wikiDir, name) {
-  const config = path.join(wikiDir, '.vitepress', 'config.mts')
-  if (!fs.existsSync(config)) return ''
-  const m = readText(config).match(new RegExp(`const ${name}\\s*=\\s*(['"])(.*?)\\1`))
-  return m && !m[2].startsWith('__') ? m[2] : ''
-}
-
 /**
  * Turn a host URL into `{ candidates: [repoPath...], start, end }`, or null when it is not a
  * link into this repository. `repoUrl` empty means "unknown": the caller then treats a match
@@ -805,6 +798,19 @@ export function checkWiki(options) {
       ['public/llms.txt', path.join(wikiDir, 'public', 'llms.txt'), null],
       ['../llms.txt', path.join(repoRoot, 'llms.txt'), repoRoot],
     ]
+    const siteBase = normalizeBase(state.base || readConfigConst(wikiDir, 'BASE') || '/')
+    const isExternal = (url) => /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('#') || url.startsWith('//')
+    /** Why a link in a deployed (public/) copy is not a working site route, or null when it is one. */
+    const routeProblem = (url) => {
+      if (isExternal(url)) return null
+      if (!url.startsWith('/')) return 'is a relative link; the deployed copy needs a site route'
+      const target = safeDecode(url.split(/[?#]/)[0])
+      if (!target.startsWith(siteBase)) return `is outside the site base ${siteBase}`
+      const route = target.slice(siteBase.length)
+      if (/\.(md|html)$/i.test(route)) return 'must be a clean route (no .md or .html)'
+      if (route === '' || route.endsWith('/')) return onDisk.has(`${route}index.md`) ? null : `has no page (${route}index.md)`
+      return onDisk.has(`${route}.md`) || fs.existsSync(path.join(wikiDir, 'public', route)) ? null : `has no page (${route}.md)`
+    }
     for (const [label, file, base] of llms) {
       if (!fs.existsSync(file)) continue
       const text = readText(file)
@@ -815,11 +821,41 @@ export function checkWiki(options) {
         if (!/^\s*-\s*\[/.test(line)) return
         const m = line.match(/^- \[([^\]]+)\]\(([^)\s]+)\)(?:: \S.*)?$/)
         if (!m || m[1] !== m[1].trim()) return error(label, i + 1, 'llms', 'link line must be exactly `- [Title](url): description`')
-        if (base && !/^[a-z][a-z0-9+.-]*:|^\//i.test(m[2])) {
+        if (label === 'public/llms.txt') {
+          const problem = routeProblem(m[2])
+          if (problem) error(label, i + 1, 'llms', `${m[2]} ${problem}`)
+        } else if (base && !/^[a-z][a-z0-9+.-]*:|^\//i.test(m[2])) {
           const target = path.resolve(base, safeDecode(m[2].split('#')[0]))
           if (!fs.existsSync(target)) error(label, i + 1, 'llms', `links to ${m[2]}, which does not exist`)
         }
       })
+    }
+
+    // llms-full.txt inlines every page; its deployed copy uses site routes.
+    const LLMS_LINK = /!?\[(?:[^[\]]|\[[^[\]]*\])*\]\(\s*<?((?:[^()\s<>]|\([^()\s]*\))+)>?(?:\s+"[^"]*")?\s*\)/g
+    for (const label of ['llms-full.txt', 'public/llms-full.txt']) {
+      const file = path.join(wikiDir, label)
+      if (!fs.existsSync(file)) continue
+      const text = readText(file)
+      const inlined = new Set([...text.matchAll(/^<doc\b[^>\n]*\bpath="([^"]+)"/gm)].map((m) => m[1]))
+      const absent = allPages.filter((p) => !inlined.has(p))
+      if (absent.length) {
+        const shown = `${absent.slice(0, 5).join(', ')}${absent.length > 5 ? ', …' : ''}`
+        error(label, 0, 'llms', `${absent.length} page(s) have no <doc> block (${shown}); run \`node wiki/scripts/gen-llms.mjs wiki\``)
+      }
+      for (const { n, text: line } of scanPage(text).prose) {
+        for (const m of line.matchAll(LLMS_LINK)) {
+          const url = m[1]
+          if (label.startsWith('public/')) {
+            const problem = routeProblem(url)
+            if (problem) error(label, n, 'llms', `${url} ${problem}`)
+          } else if (!isExternal(url)) {
+            const target = safeDecode(url.split(/[?#]/)[0])
+            const resolved = target.startsWith('/') ? path.join(wikiDir, target) : path.resolve(wikiDir, target)
+            if (target && !fs.existsSync(resolved) && !fs.existsSync(resolved + '.md')) error(label, n, 'llms', `links to ${url}, which does not exist`)
+          }
+        }
+      }
     }
 
     if (opts.baseline) checkLeftovers()
