@@ -1,0 +1,317 @@
+// Tests for the hub-page generator. Run with: node --test "plugins/deep-wiki/tests/*.test.mjs"
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const scripts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../skills/wiki-vitepress/templates/scripts')
+const generator = path.join(scripts, 'gen-section-indexes.mjs')
+const { checkWiki } = await import(pathToFileURL(path.join(scripts, 'check-wiki.mjs')).href)
+const { MARKER, relativeInside } = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
+
+const page = (title, description) => `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\n---\n\n# Page\n\nBody.\n`
+const leaf = (slug, dir) => ({ title: slug, name: slug, path: `${dir}/${slug}.md`, prompt: 'Read src/a.ts and src/b.ts.', children: [] })
+
+/** A wiki folder in the OS temp dir, removed when the test ends. `files` maps relative path to text. */
+function wiki(t, files, catalogue) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-site-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const all = catalogue ? { 'catalogue.json': JSON.stringify(catalogue), ...files } : files
+  for (const [rel, text] of Object.entries(all)) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true })
+    fs.writeFileSync(path.join(dir, rel), text)
+  }
+  return dir
+}
+
+function generate(dir, ...flags) {
+  const result = spawnSync(process.execPath, [generator, dir, ...flags], { encoding: 'utf8' })
+  return { code: result.status, out: result.stdout + result.stderr }
+}
+const read = (dir, rel) => fs.readFileSync(path.join(dir, rel), 'utf8')
+const exists = (dir, rel) => fs.existsSync(path.join(dir, rel))
+
+const SECTION = {
+  title: 'core',
+  name: 'Core',
+  dir: '01-core',
+  description: 'The core services.',
+  children: [leaf('cache', '01-core'), leaf('auth', '01-core')],
+}
+
+test('frontmatter text is made safe for page prose', (t) => {
+  const dir = wiki(
+    t,
+    {
+      '01-core/cache.md': page('Repository<T> | Cache', 'How Repository<T> caches {{ entity }} rows | and `Map<K, V>` stays.'),
+      '01-core/auth.md': page('Auth [v2]', 'Plain text.'),
+    },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.equal(generate(dir).code, 0)
+  const index = read(dir, '01-core/index.md')
+  assert.ok(index.includes('| [Repository&lt;T> \\| Cache](./cache.md) | How Repository&lt;T> caches `{{ entity }}` rows \\| and `Map<K, V>` stays. |'))
+  assert.ok(index.includes('| [Auth \\[v2\\]](./auth.md) | Plain text. |'))
+
+  // The pages are at fault (the checker says so, in their own frontmatter), but the hub that
+  // lists them stays buildable: nothing in the generated file reads as a tag or an interpolation.
+  const findings = checkWiki({ wikiDir: dir, repo: dir, source: false, site: true })
+  const all = [...findings.errors, ...findings.warnings]
+  assert.deepEqual(all.filter((f) => f.file === '01-core/index.md'), [])
+  assert.ok(all.some((f) => f.file === '01-core/cache.md' && f.rule === 'bare-tag'))
+})
+
+test('a catalogue name the checker rejects is still escaped in the page body', (t) => {
+  const dir = wiki(
+    t,
+    { '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') },
+    { project: 'Demo', summary: 's', items: [{ ...SECTION, name: 'Core <Api>', description: 'Uses ${{ github.ref }} and Task<string>.' }] },
+  )
+  assert.equal(generate(dir).code, 0)
+  const index = read(dir, '01-core/index.md')
+  assert.match(index, /\n# Core &lt;Api>\n/)
+  assert.ok(index.includes('Uses $`{{ github.ref }}` and Task&lt;string>.'))
+  // The catalogue is where this gets fixed: the checker reports it there.
+  const report = checkWiki({ wikiDir: dir, repo: dir, source: false, catalogueOnly: true })
+  assert.deepEqual(report.errors.map((e) => e.message), ['"core": name must not contain <, >, {{ or }}', '"core": description must not contain <, >, {{ or }}'])
+})
+
+test('brackets inside a code span in a title are left alone', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Access `items[0]` [fast]', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION] })
+  assert.equal(generate(dir).code, 0)
+  assert.ok(read(dir, '01-core/index.md').includes('| [Access `items[0]` \\[fast\\]](./cache.md) | C. |'))
+})
+
+test('a section folder outside the wiki is refused before anything is written', (t) => {
+  const outside = (dir) => ({ ...SECTION, title: 'escape', dir, children: [leaf('x', '01-core')] })
+  for (const bad of ['../outside', '01-core/../../outside', '01-core/dist']) {
+    const dir = wiki(t, { '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION, outside(bad)] })
+    const run = generate(dir, '--force')
+    assert.equal(run.code, 2, bad)
+    assert.match(run.out, /nothing was written/)
+    assert.ok(!exists(dir, '01-core/index.md'), 'the valid section is not written either')
+    assert.ok(!fs.existsSync(path.join(dir, '..', 'outside')))
+  }
+})
+
+test('--prune with a catalogue that has no sections deletes nothing', (t) => {
+  const generated = `---\ntitle: "Core"\ndescription: "C."\n---\n\n# Core\n${MARKER}\n`
+  for (const catalogue of [{}, { items: [] }, { items: 'x' }]) {
+    const dir = wiki(t, { '01-core/index.md': generated, 'catalogue.json': JSON.stringify(catalogue) })
+    const run = generate(dir, '--prune')
+    assert.equal(run.code, 2)
+    assert.match(run.out, /has no sections/)
+    assert.ok(exists(dir, '01-core/index.md'))
+  }
+})
+
+test('a hand-written page that only quotes the marker is not treated as generated', (t) => {
+  const mine = `---\ntitle: Mine\ndescription: Mine.\n---\n\n# Mine\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\nGenerated files carry \`${MARKER}\`:\n\n${MARKER}\n`
+  const dir = wiki(
+    t,
+    { '01-core/index.md': mine, '02-gone/index.md': mine, '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.match(generate(dir, '--prune').out, /skipped  01-core\/index\.md/)
+  assert.equal(read(dir, '01-core/index.md'), mine)
+  assert.ok(exists(dir, '02-gone/index.md'))
+})
+
+test('the onboarding hub lists pages only; I/O failures exit 2', (t) => {
+  const dir = wiki(t, { 'onboarding/contributor-guide.md': page('Contributor Guide', 'G.'), 'onboarding/README.md': '# readme\n', 'onboarding/AGENTS.md': '# agents\n' })
+  assert.equal(generate(dir).code, 0)
+  assert.doesNotMatch(read(dir, 'onboarding/index.md'), /README|AGENTS/)
+  // A second positional argument is a mistake, not a second wiki.
+  assert.equal(generate(dir, 'other').code, 2)
+  // index.md is a folder: the write fails, and the script says so in one line instead of a stack trace.
+  const blocked = wiki(t, { '01-core/index.md/keep.txt': 'x', '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION] })
+  const run = generate(blocked, '--force')
+  assert.equal(run.code, 2)
+  assert.doesNotMatch(run.out, /^\s+at /m)
+})
+
+test('rows follow catalogue order and the marker sits under the H1', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') }, { project: 'Demo', summary: 's', items: [SECTION] })
+  generate(dir)
+  const index = read(dir, '01-core/index.md')
+  assert.ok(index.includes(`# Core\n${MARKER}\n\nThe core services.\n`))
+  assert.ok(index.indexOf('[Cache]') < index.indexOf('[Auth]'))
+})
+
+test('nested sections get their own index and a link from the parent', (t) => {
+  const nested = { title: 'storage', name: 'Storage', dir: 'storage', description: 'Persistence.', children: [leaf('disk', '01-core/storage')] }
+  const dir = wiki(
+    t,
+    { '01-core/cache.md': page('Cache', 'C.'), '01-core/storage/disk.md': page('Disk', 'D.') },
+    { project: 'Demo', summary: 's', items: [{ ...SECTION, children: [leaf('cache', '01-core'), nested] }] },
+  )
+  assert.equal(generate(dir).code, 0)
+  assert.ok(read(dir, '01-core/index.md').includes('| [Storage](./storage/index.md) | Persistence. |'))
+  const sub = read(dir, '01-core/storage/index.md')
+  assert.match(sub, /^---\ntitle: "Storage"\n/)
+  assert.ok(sub.includes('| [Disk](./disk.md) | D. |'))
+})
+
+test('the onboarding hub lists only the guides that exist, in reading order', (t) => {
+  const dir = wiki(
+    t,
+    {
+      'onboarding/executive-guide.md': page('Executive Guide', 'For leaders.'),
+      'onboarding/contributor-guide.md': page('Contributor Guide', 'Uses List<T>.'),
+      'onboarding/zz-extra.md': page('Extra', 'Other.'),
+      '01-core/cache.md': page('Cache', 'C.'),
+      '01-core/auth.md': page('Auth', 'A.'),
+    },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.equal(generate(dir).code, 0)
+  const hub = read(dir, 'onboarding/index.md')
+  assert.match(hub, /^---\ntitle: "Onboarding"\n/)
+  assert.ok(hub.includes(MARKER))
+  assert.ok(hub.includes('| Guide | Audience | What it covers |'))
+  assert.ok(hub.includes('| [Contributor Guide](./contributor-guide.md) | New contributors | Uses List&lt;T>. |'))
+  assert.ok(hub.indexOf('contributor-guide.md') < hub.indexOf('executive-guide.md'))
+  assert.ok(hub.indexOf('executive-guide.md') < hub.indexOf('zz-extra.md'))
+  assert.ok(!hub.includes('staff-engineer-guide'))
+})
+
+test('a wiki without a catalogue gets the onboarding hub only', (t) => {
+  const dir = wiki(t, { 'onboarding/contributor-guide.md': page('Contributor Guide', 'Start here.'), '01-architecture/overview.md': page('Overview', 'O.') })
+  const run = generate(dir)
+  assert.equal(run.code, 0)
+  assert.match(run.out, /no catalogue\.json/)
+  assert.ok(exists(dir, 'onboarding/index.md'))
+  assert.ok(!exists(dir, '01-architecture/index.md'))
+})
+
+test('a wiki without onboarding guides says the hub was not written', (t) => {
+  const dir = wiki(t, { '01-architecture/overview.md': page('Overview', 'O.') })
+  const run = generate(dir)
+  assert.equal(run.code, 0)
+  assert.match(run.out, /no onboarding guides; hub not written/)
+  assert.ok(!exists(dir, 'onboarding/index.md'))
+})
+
+test('hand-written hubs are kept unless --force', (t) => {
+  const mine = '---\ntitle: Mine\ndescription: Mine.\n---\n\n# Mine\n'
+  const dir = wiki(
+    t,
+    { '01-core/index.md': mine, 'onboarding/index.md': mine, 'onboarding/contributor-guide.md': page('Contributor Guide', 'G.'), '01-core/cache.md': page('Cache', 'C.'), '01-core/auth.md': page('Auth', 'A.') },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  assert.match(generate(dir).out, /skipped  01-core\/index\.md/)
+  assert.equal(read(dir, '01-core/index.md'), mine)
+  assert.equal(read(dir, 'onboarding/index.md'), mine)
+  generate(dir, '--force')
+  assert.match(read(dir, '01-core/index.md'), /title: "Core"/)
+  assert.match(read(dir, 'onboarding/index.md'), /title: "Onboarding"/)
+})
+
+test('--prune removes generated indexes of folders that left the catalogue, and nothing else', (t) => {
+  const generated = `---\ntitle: "Old"\ndescription: "Old."\n---\n\n# Old\n${MARKER}\n`
+  const dir = wiki(
+    t,
+    {
+      '01-core/cache.md': page('Cache', 'C.'),
+      '01-core/auth.md': page('Auth', 'A.'),
+      '01-core/old-sub/index.md': generated,
+      '02-gone/index.md': generated,
+      '02-gone/page.md': page('Page', 'P.'),
+      '03-kept/index.md': '---\ntitle: Mine\ndescription: Mine.\n---\n\n# Mine\n',
+    },
+    { project: 'Demo', summary: 's', items: [SECTION] },
+  )
+  generate(dir)
+  assert.ok(exists(dir, '02-gone/index.md'), 'without --prune nothing is removed')
+
+  const run = generate(dir, '--prune')
+  assert.equal(run.code, 0)
+  assert.match(run.out, /removed  02-gone\/index\.md/)
+  assert.ok(!exists(dir, '02-gone/index.md'))
+  assert.ok(exists(dir, '02-gone/page.md'), 'pages are never pruned')
+  assert.ok(!exists(dir, '01-core/old-sub'), 'an emptied folder is removed')
+  assert.ok(exists(dir, '03-kept/index.md'), 'an unmarked index is not ours to delete')
+  assert.ok(exists(dir, '01-core/index.md'))
+})
+
+test('bad input exits 2 without writing', (t) => {
+  const dir = wiki(t, { 'catalogue.json': '{ not json' })
+  assert.equal(generate(dir).code, 2)
+  assert.equal(generate(path.join(dir, 'missing')).code, 2)
+  assert.equal(generate(dir, '--frce').code, 2)
+})
+
+test('a catalogue page nobody has written yet gets no row, so the index has no dead link', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Cache', 'How the cache works.') }, { project: 'P', summary: 'S', items: [SECTION] })
+  assert.equal(generate(dir).code, 0)
+  const index = read(dir, '01-core/index.md')
+  assert.match(index, /\(\.\/cache\.md\)/)
+  assert.doesNotMatch(index, /auth\.md/)
+  const result = checkWiki({ wikiDir: dir, site: true, source: false })
+  assert.deepEqual(result.errors.filter((f) => f.rule === 'link'), [])
+})
+
+/** A directory link that needs no special rights on Windows (a junction) or anywhere else. */
+const linkDir = (target, link) => fs.symlinkSync(target, link, 'junction')
+
+test('a section folder that is a link out of the wiki is refused before anything is written', (t) => {
+  const dir = wiki(t, { '02-other/a.md': page('A', 'A page.') }, {
+    project: 'P',
+    summary: 'S',
+    items: [
+      { title: 'core', name: 'Core', dir: '01-core', description: 'Core.', children: [{ title: 'storage', name: 'Storage', dir: '01-core/storage', description: 'Storage.', children: [leaf('disk', '01-core/storage')] }] },
+      { title: 'other', name: 'Other', dir: '02-other', description: 'Other.', children: [leaf('a', '02-other')] },
+    ],
+  })
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outside-'))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  linkDir(outside, path.join(dir, '01-core'))
+  const result = generate(dir)
+  assert.equal(result.code, 2)
+  assert.match(result.out, /inside the wiki|resolves outside/)
+  assert.deepEqual(fs.readdirSync(outside), [], 'nothing was created through the link')
+  // A folder that does not exist yet, below the link, also resolves to where it would land.
+  assert.equal(relativeInside(dir, path.join(dir, '01-core', 'storage', 'index.md')), null)
+  assert.equal(relativeInside(dir, path.join(dir, '02-other', 'new', 'index.md')), '02-other/new/index.md')
+  assert.ok(!exists(dir, '02-other/index.md'), 'nothing was written at all')
+})
+
+test('a hub file that is a link to a file outside the wiki is refused', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Cache', 'Cache.'), '01-core/auth.md': page('Auth', 'Auth.') }, { project: 'P', summary: 'S', items: [SECTION] })
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outside-'))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  const victim = path.join(outside, 'index.md')
+  const original = `# Theirs\n${MARKER}\n`
+  fs.writeFileSync(victim, original)
+  try {
+    fs.symlinkSync(victim, path.join(dir, '01-core/index.md'), 'file')
+  } catch {
+    return t.skip('this account may not create file symlinks')
+  }
+  const result = generate(dir)
+  assert.equal(result.code, 2)
+  assert.match(result.out, /resolves outside/)
+  assert.equal(fs.readFileSync(victim, 'utf8'), original)
+})
+
+test('a generated onboarding hub is emptied when its last guide is removed; a hand-written one is kept', (t) => {
+  const dir = wiki(t, { 'onboarding/contributor-guide.md': page('Contributor Guide', 'Start here.') })
+  assert.equal(generate(dir).code, 0)
+  assert.match(read(dir, 'onboarding/index.md'), /contributor-guide\.md/)
+  fs.rmSync(path.join(dir, 'onboarding/contributor-guide.md'))
+  const result = generate(dir)
+  assert.equal(result.code, 0)
+  assert.match(result.out, /emptied/)
+  const hub = read(dir, 'onboarding/index.md')
+  assert.doesNotMatch(hub, /contributor-guide/)
+  assert.match(hub, /No onboarding guides have been written yet/)
+  assert.deepEqual(checkWiki({ wikiDir: dir, site: true, source: false }).errors.filter((f) => f.rule === 'link'), [])
+
+  const manual = '---\ntitle: "Onboarding"\ndescription: "Mine."\n---\n\n# Onboarding\n\nSee [Guide](./gone.md).\n'
+  fs.writeFileSync(path.join(dir, 'onboarding/index.md'), manual)
+  assert.equal(generate(dir).code, 0)
+  assert.equal(read(dir, 'onboarding/index.md'), manual)
+})

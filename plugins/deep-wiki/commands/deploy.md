@@ -4,7 +4,7 @@ description: Generate a GitHub Actions workflow that builds the VitePress wiki a
 
 # Deep Wiki: Deploy to GitHub Pages
 
-Load the `deep-wiki:wiki-conventions` skill, then the `deep-wiki:wiki-deploy` skill, and follow it.
+Load the `deep-wiki:wiki-conventions` skill, then the `deep-wiki:wiki-deploy` skill, and follow them.
 
 ## Arguments
 

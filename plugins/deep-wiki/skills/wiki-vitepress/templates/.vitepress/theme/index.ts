@@ -2,6 +2,9 @@ import DefaultTheme from 'vitepress/theme'
 import { onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vitepress'
 import mediumZoom, { type Zoom } from 'medium-zoom'
+// Fonts ship with the site: no request to a font service, and the wiki works offline.
+import '@fontsource-variable/atkinson-hyperlegible-next'
+import '@fontsource-variable/atkinson-hyperlegible-mono'
 import './custom.css'
 
 // All DOM work runs from setup() hooks, never enhanceApp(): enhanceApp also runs
@@ -33,7 +36,8 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
   const viewport = document.createElement('div')
   viewport.className = 'mermaid-modal-viewport'
   const stage = document.createElement('div')
-  stage.className = 'mermaid-modal-stage'
+  // mermaid-diagram-colors: the clone gets the same dark overrides as the diagram on the page.
+  stage.className = 'mermaid-modal-stage mermaid-diagram-colors'
 
   // Clone, never move: moving the SVG would break the page layout.
   const clone = svg.cloneNode(true) as SVGSVGElement
@@ -43,7 +47,8 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
   }
   clone.removeAttribute('width')
   clone.removeAttribute('height')
-  clone.style.maxWidth = 'none'
+  // Mermaid sets an inline max-width in pixels; the stage's CSS sizes the clone instead.
+  clone.style.maxWidth = ''
   stage.appendChild(clone)
   viewport.appendChild(stage)
   dialog.append(controls, viewport)
@@ -130,7 +135,8 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
   // Escape closes a modal <dialog> natively. Removing the element drops every listener above.
   dialog.addEventListener('close', () => {
     dialog.remove()
-    trigger.focus()
+    // After a route change the page that held the trigger is gone.
+    if (trigger.isConnected) trigger.focus()
   })
 
   document.body.appendChild(dialog)
@@ -138,57 +144,85 @@ function openDiagramModal(svg: SVGSVGElement, trigger: HTMLElement) {
   controls.querySelector<HTMLButtonElement>('[data-action="close"]')?.focus()
 }
 
-/** Mermaid renders asynchronously after mount, so poll briefly and bind each diagram once. */
-function setupMermaidZoom() {
-  let attempts = 0
-  const bind = () => {
-    document.querySelectorAll<HTMLElement>('.mermaid-diagram, .vp-doc .mermaid').forEach((el) => {
-      if (el.dataset.zoomBound) return
-      const svg = el.querySelector('svg')
-      if (!svg) return
-      el.dataset.zoomBound = '1'
-      el.classList.add('mermaid-zoomable')
-      el.tabIndex = 0
-      el.setAttribute('role', 'button')
-      el.setAttribute('aria-label', 'Enlarge diagram')
-      const open = () => openDiagramModal(svg, el)
-      el.addEventListener('click', open)
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          open()
-        }
-      })
+const DIAGRAMS = '.mermaid-diagram, .vp-doc .mermaid'
+
+/**
+ * Give every rendered diagram a real <button> for keyboard and screen-reader users; clicking the
+ * diagram itself also opens it. The container keeps no role, so its text stays readable.
+ */
+function bindDiagrams() {
+  document.querySelectorAll<HTMLElement>(DIAGRAMS).forEach((el) => {
+    if (!el.querySelector('svg') || el.querySelector(':scope > .mermaid-zoom-button')) return
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'mermaid-zoom-button'
+    btn.textContent = 'Enlarge'
+    btn.setAttribute('aria-label', 'Enlarge diagram')
+    el.appendChild(btn)
+    el.classList.add('mermaid-zoomable')
+    // A re-render replaces the container's children but keeps the container: bind it once,
+    // and look the SVG up at open time so the modal never clones a detached node.
+    if (el.dataset.zoomBound) return
+    el.dataset.zoomBound = '1'
+    el.addEventListener('click', () => {
+      const svg = el.querySelector<SVGSVGElement>('svg')
+      if (svg) openDiagramModal(svg, el.querySelector<HTMLElement>(':scope > .mermaid-zoom-button') ?? el)
     })
-    if (attempts++ < 20) setTimeout(bind, 250)
-  }
-  bind()
+  })
+}
+
+let diagramObserver: MutationObserver | undefined
+
+/**
+ * Mermaid renders asynchronously, one diagram after another, and again whenever its plugin
+ * re-renders. Watch the page instead of guessing how long that takes. One observer for the
+ * life of the app; binding is idempotent, so the mutation it causes itself settles at once.
+ */
+function setupMermaidZoom() {
+  bindDiagrams()
+  if (diagramObserver) return
+  let queued = false
+  diagramObserver = new MutationObserver(() => {
+    if (queued) return
+    queued = true
+    // A timer, not requestAnimationFrame: frames do not run while the tab is in the background.
+    setTimeout(() => {
+      queued = false
+      bindDiagrams()
+    }, 100)
+  })
+  diagramObserver.observe(document.body, { childList: true, subtree: true })
 }
 
 /** A floating button (and the F key) that hides the sidebar and outline. Created once. */
 function setupFocusMode() {
   if (document.querySelector('.focus-toggle')) return
-  const toggle = () => document.documentElement.classList.toggle('focus-mode')
-
   const btn = document.createElement('button')
+  // The class goes on <body>: the Mermaid plugin watches <html> attributes and would
+  // re-render every diagram on each toggle.
+  const toggle = () => btn.setAttribute('aria-pressed', String(document.body.classList.toggle('focus-mode')))
+
   btn.type = 'button'
   btn.className = 'focus-toggle'
-  btn.setAttribute('aria-label', 'Toggle focus mode')
+  btn.setAttribute('aria-label', 'Focus mode')
+  btn.setAttribute('aria-pressed', 'false')
   btn.title = 'Focus mode (F)'
   btn.textContent = '⤢'
   btn.addEventListener('click', toggle)
   document.body.appendChild(btn)
 
   document.addEventListener('keydown', (e) => {
-    const target = e.target as HTMLElement
+    const target = e.target as HTMLElement | null
     if (
-      e.key.toLowerCase() === 'f' &&
+      e.key?.toLowerCase() === 'f' &&
       !e.ctrlKey &&
       !e.metaKey &&
       !e.altKey &&
-      !target.isContentEditable &&
-      !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) &&
-      !document.querySelector('dialog[open]')
+      !target?.isContentEditable &&
+      !['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '') &&
+      !document.querySelector('dialog[open]') &&
+      // Focus mode is a desktop layout: below 960px the button is hidden and the key does nothing.
+      window.matchMedia('(min-width: 960px)').matches
     ) {
       e.preventDefault()
       toggle()
@@ -208,7 +242,15 @@ export default {
     onMounted(init)
     watch(
       () => route.path,
-      () => nextTick(init),
+      () => {
+        // Browser Back with a diagram open: the dialog belongs to the page being left.
+        // Removed here, not left to the dialog's own `close` event, which fires a task later.
+        document.querySelectorAll<HTMLDialogElement>('dialog.mermaid-modal').forEach((d) => {
+          d.close()
+          d.remove()
+        })
+        nextTick(init)
+      },
     )
   },
 }

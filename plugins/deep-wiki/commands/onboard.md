@@ -5,12 +5,23 @@ argument-hint: "[contributor|staff|executive|pm ...]"
 
 # Deep Wiki: Onboarding Guide Generation
 
-Load the `deep-wiki:wiki-conventions` skill, then the `deep-wiki:wiki-onboarding` skill, and follow them to write the guides to `wiki/onboarding/`.
+Load `deep-wiki:wiki-conventions`, then `deep-wiki:wiki-onboarding`, and follow them to write the guides to `wiki/onboarding/`.
 
-To keep each guide's context small, you may dispatch one `deep-wiki:wiki-writer` subagent per guide. Give each the onboarding guide's section list from the skill as its task, and the repository context as the conventions describe.
+1. **Scripts.** Load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10. It gives the flags for a first run and for a later one.
+2. **Which guides.** The depth is the one recorded in `wiki/.deep-wiki.json`, else `full`.
+
+   | Arguments | Full-depth wiki | Crisp wiki |
+   |-----------|-----------------|------------|
+   | Guides named | Write them, even if they exist | Write them at crisp depth, even if they exist |
+   | None | Write the guides that are missing; if all four exist, ask which to rewrite | Write the contributor guide if it is missing; if it exists, ask whether to rewrite it |
+
+3. **Write.** Dispatch one `deep-wiki:wiki-writer` per guide with the onboarding task form (conventions section 11), which keeps each guide's context small. If that agent type is unavailable, write them yourself, one at a time.
+4. **Hub.** Run `node wiki/scripts/gen-section-indexes.mjs wiki` to write `wiki/onboarding/index.md`. Do not write the hub by hand.
+5. **Check** each guide with `node wiki/scripts/check-wiki.mjs wiki --page onboarding/<guide>.md` and fix the errors.
+6. **llms files.** If `wiki/llms.txt` exists, run `node wiki/scripts/gen-llms.mjs wiki` so the guides are listed.
 
 ## Arguments
 
-Optional list of guides to generate; the default is all four.
+Optional list of guides: `contributor` (`contributor-guide.md`), `staff` (`staff-engineer-guide.md`), `executive` (`executive-guide.md`), `pm` (`product-manager-guide.md`).
 
 $ARGUMENTS
