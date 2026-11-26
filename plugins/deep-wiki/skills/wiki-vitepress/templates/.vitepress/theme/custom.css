@@ -28,20 +28,60 @@
 }
 
 /* ---------- Layout and content ---------- */
-/* Use the whole window. The default theme centres a 1440px frame and caps the text column
-   at 688px, which leaves wide blank margins on a large screen; wikis are table- and
-   diagram-heavy and read better with the room.
-   - The frame: sidebar, nav bar, and content all derive their offsets from this variable,
-     so they stay aligned. 100vw pins the sidebar to the left edge and the outline to the
-     right. The cap only matters on ultrawide screens, where uncapped lines of text
-     would run too long to read.
-   - The text column: takes everything between the sidebar and the outline. The extra
-     ancestors outrank the default theme's scoped rules of the same shape. */
-@media (min-width: 1440px) {
+/* Use the whole window. The default theme centres a 1440px frame, caps the text column at
+   688px, and pads every panel by 32px, which leaves wide blank bands on a large screen.
+   Wikis are table- and diagram-heavy and read better with the room.
+
+   The extra .Layout ancestor outranks the default theme's scoped rules of the same shape. */
+@media (min-width: 960px) {
   :root {
-    --vp-layout-max-width: min(100vw, 2200px);
+    /* Default 272px, of which 64px was padding. Narrower panel, wider labels. */
+    --vp-sidebar-width: 248px;
+  }
+  /* Sidebar and the site title above it: pinned to the left edge with a 16px inset. */
+  .Layout .VPSidebar {
+    width: var(--vp-sidebar-width);
+    padding-left: 16px;
+    padding-right: 12px;
+  }
+  .Layout .VPNavBar.has-sidebar .title {
+    width: var(--vp-sidebar-width);
+    padding-left: 16px;
+    padding-right: 12px;
+  }
+  .Layout .VPNavBar.has-sidebar .content {
+    padding-left: var(--vp-sidebar-width);
+    padding-right: 24px;
+  }
+  .Layout .VPNavBar .VPNavBarSearch {
+    padding-left: 24px;
+  }
+  /* 24px gutters around the text column (default: 64px on each side of it). */
+  .Layout .VPContent .VPDoc {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .Layout .VPContent .VPDoc .content {
+    padding-left: 0;
+    padding-right: 24px;
+  }
+  .Layout .VPContent .VPDoc .aside {
+    padding-left: 16px;
   }
 }
+/* From 1440px the default theme centres its frame. Make the frame the window, so the
+   sidebar stays on the left edge and the outline on the right. */
+@media (min-width: 1440px) {
+  :root {
+    --vp-layout-max-width: 100vw;
+  }
+  .Layout .VPContent.has-sidebar {
+    padding-left: var(--vp-sidebar-width);
+    padding-right: 0;
+  }
+}
+/* The text column takes everything between the sidebar and the outline. The cap only
+   matters on ultrawide screens, where longer lines of text are too long to read. */
 .Layout .VPContent .VPDoc .container {
   max-width: none;
 }
@@ -52,7 +92,9 @@
 }
 .Layout .VPContent .VPDoc .content-container,
 .Layout .VPContent .VPDoc.has-aside .content-container {
-  max-width: none;
+  max-width: 1800px;
+  /* When the cap applies, keep the text against the sidebar; spare room goes to the right. */
+  margin-left: 0;
 }
 /* Nothing in a page may push past the text column into the outline. */
 .vp-doc {
