@@ -1,6 +1,6 @@
 ---
 name: orchestrate-subagents
-description: 'Plans, and when authorized runs, a large multi-part task as batches of sub-agent work, saved as docs/woz-docs/spec-dev/<slug>/PLAN.md. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
+description: 'Plans, and when authorized runs, a large multi-part task as batches of sub-agent work, saved as a PLAN.md under docs/woz-docs/spec-dev/. Use when asked to orchestrate, delegate, fan out, parallelize, or plan sub-agent or multi-agent work, to split a large task across agents, or to write a plan file that another session will execute. Not for single-step tasks, for writing a prompt (use optimize-prompt), or for line-by-line implementation plans of one feature.'
 ---
 
 # Orchestrate Sub-Agents
