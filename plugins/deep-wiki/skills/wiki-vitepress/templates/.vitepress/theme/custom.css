@@ -69,10 +69,10 @@
     padding-left: 24px;
   }
   /* Gutters around the text column (default: 64px on each side of it). The left one is
-     36px so the "#" link that appears beside a heading on hover (it hangs 0.87em to the
-     left, 28px on the page title) sits clear of the sidebar edge. */
+     43px so the "#" link that appears beside a heading on hover (it hangs 0.87em to the
+     left, 28px on the page title) sits at least 15px clear of the sidebar edge. */
   .Layout .VPContent .VPDoc {
-    padding-left: 36px;
+    padding-left: 43px;
     padding-right: 24px;
   }
   .Layout .VPContent .VPDoc .content {
