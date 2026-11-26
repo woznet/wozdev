@@ -9,6 +9,6 @@ Load the `deep-wiki:wiki-conventions` skill, then the `deep-wiki:wiki-changelog`
 
 ## Arguments
 
-Optional revision range (`v1.2.0..HEAD`) or `--since <date>`; the default is the last 30 days. `--write` also writes `wiki/changelog.md`.
+Optional revision range (`v1.2.0..HEAD`) or `--since <date>`; the default is the last 30 days. `--write` also writes `wiki/changelog.md` as the skill describes.
 
 $ARGUMENTS

@@ -1,6 +1,6 @@
 ---
 name: wiki-vitepress
-description: Use when generated wiki Markdown needs to become a browsable VitePress site - scaffolding or repairing wiki/package.json, .vitepress/config.mts, the dark theme, Mermaid rendering or click-to-zoom, the landing page, or fixing a VitePress build that fails on Mermaid, generics, or <br/> tags.
+description: Use when generated wiki Markdown needs to become a browsable VitePress site - scaffolding or repairing wiki/package.json, .vitepress/config.mts, the dark theme, Mermaid rendering or click-to-zoom, the landing page, or fixing a VitePress build that fails on Mermaid, generics, dead links, or {{ }} text.
 license: MIT
 metadata:
   author: Microsoft (forked)
@@ -11,42 +11,43 @@ metadata:
 
 Wrap the Markdown in `wiki/` in a dark-only VitePress site with dark Mermaid diagrams, click-to-zoom, and focus mode.
 
-**First load `deep-wiki:wiki-conventions`.** It defines the repo context, palette, and output layout used here.
+Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines the repository context, the write modes, the output layout, and the scripts used here (section 10). Run every command from the repository root.
 
-## Step 1: Copy the Templates
+The templates live in this skill's `templates/` folder, next to this file. `<skill dir>` below is this skill's base directory.
 
-The templates live in this skill's `templates/` folder (next to this file). Copy them into `wiki/`, creating missing files only. Replace existing scaffold files only when the user asked you to rebuild the scaffold or the calling workflow is in `regenerate` mode (conventions section 8); the `scripts/` files are always safe to refresh.
+## Step 1: Scaffold with `init-wiki.mjs`
 
-| Template | Destination |
-|----------|-------------|
-| `templates/package.json` | `wiki/package.json` |
-| `templates/gitignore` | `wiki/.gitignore` |
-| `templates/.vitepress/config.mts` | `wiki/.vitepress/config.mts` |
-| `templates/.vitepress/theme/index.ts` | `wiki/.vitepress/theme/index.ts` |
-| `templates/.vitepress/theme/custom.css` | `wiki/.vitepress/theme/custom.css` |
-| `templates/public/logo.svg` | `wiki/public/logo.svg` |
-| `templates/scripts/*.mjs` | `wiki/scripts/` (`lib.mjs`, `check-wiki.mjs`, `gen-section-indexes.mjs`) |
+Never copy template files or edit placeholders by hand. Do not read the template files; run the script.
 
-Then fill in the placeholders. Each one already sits inside quotes in the template, so replace only the `__NAME__` text and keep the quotes around it:
+```bash
+node <skill dir>/templates/scripts/init-wiki.mjs wiki \
+  --title "<project name>" --description "<one specific sentence about the project>" \
+  --repo-url "<REPO_URL, or '' when HOST is local>" --branch "<BRANCH>" --host <HOST> --depth <full|crisp>
+```
 
-| Placeholder | File | Value |
-|-------------|------|-------|
-| `__PACKAGE_NAME__` | `package.json` | Repo name, lowercase kebab-case |
-| `__SITE_TITLE__` | `config.mts` | Project name |
-| `__SITE_DESCRIPTION__` | `config.mts` | One specific sentence about the project |
-| `__BASE__` | `config.mts` | `/` for a user/org Pages site (`<owner>.github.io`) or custom domain; `/<repo-name>/` for a GitHub project Pages site; `/` when not deploying |
-| `__REPO_URL__` | `config.mts` | `REPO_URL`, or nothing (an empty string) when `HOST` is `local` |
-| `__BRANCH__` | `config.mts` | `BRANCH` |
+| Option | When |
+|--------|------|
+| `--write-mode regenerate` | The calling workflow is in `regenerate` write mode, or the user asked to rebuild the scaffold. Replaces `package.json`, `.vitepress/**`, `.gitignore`, and the logo. Without it, existing scaffold files are kept. |
+| `--base /<repo-name>/` | A GitHub project Pages site. Omit it otherwise: the previous value is kept, and a new site gets `/`. |
+| `--scripts-only` | Before any page exists: install `wiki/scripts/` and write `wiki/.deep-wiki.json`, nothing else. |
+| `--package-name <name>` | Override the name in `wiki/package.json` (default: the repository folder name). |
 
-`config.mts` builds the sidebar at build time: Onboarding first (expanded), then every `NN-name/` folder in order, with the first three expanded. You don't edit the sidebar by hand.
+What it does:
 
-- A group's label is the section's `name` in `catalogue.json`, then the `title` of its `index.md` (if 60 characters or fewer), then the folder name in title case.
-- A group heading links to the section's `index.md`; the index is not repeated as a child item.
+- Copies `package.json`, `.gitignore`, `.vitepress/config.mts`, `.vitepress/theme/`, `public/logo.svg`, and `scripts/*.mjs` into `wiki/`. `scripts/` is always refreshed.
+- Fills every placeholder as a safe string literal. Values you omit come from the previous `config.mts` and state file, then from `catalogue.json` (`project`, `summary`).
+- Writes `wiki/.deep-wiki.json` (`depth`, `host`, `repoUrl`, `branch`, `base`, `wikiDir`, `version`). The checker and the llms generator read it.
+- Prints `wrote`, `replaced`, `kept`, or `updated` per file. Put those in your report. It never deletes anything.
+
+To change one value later (for example the base path), run the installed copy with just that flag: `node wiki/scripts/init-wiki.mjs wiki --base /<repo-name>/`, then rerun `gen-llms.mjs`.
+
+The sidebar is built at build time; you never edit it:
+
+- Order: Home, Onboarding (expanded), every `NN-name/` folder (first three expanded), other folders such as `research/`, then a "More" group for other root pages such as `changelog.md`.
+- A group's label is the section's `name` in `catalogue.json`, then the `title` of its `index.md` (if 60 characters or fewer), then the folder name in title case. The group heading links to the section's `index.md`.
 - Pages follow catalogue order, then file name.
 
 The config also fails the build on a broken link between wiki pages, and marks inline code `v-pre` so `{{ }}` inside backticks is safe.
-
-If the wiki is not in `wiki/`, update `WIKI_DIR` in `config.mts`.
 
 ## Step 2: Landing Page (`wiki/index.md`)
 
@@ -54,58 +55,44 @@ Write a developer-focused home page, not a marketing page. Do not use `layout: h
 
 Required sections, in order:
 
-1. **Frontmatter**: `title: <Project> — Documentation`, `description`.
+1. **Frontmatter**: `title: "<Project> — Documentation"`, `description`.
 2. **H1 and a 1–2 sentence technical summary.**
 3. **Quick Start**: real, runnable commands taken from the repo (README, scripts, manifests).
 4. **Architecture Overview**: one Mermaid diagram followed by `<!-- Sources: ... -->`.
-5. **Documentation Map**: a table with `Section | Description` covering every section folder and `onboarding/`. Link each section to its `index.md` when one exists (`./02-architecture/`); otherwise link its first page (`./02-architecture/overview.md`). Never link a folder that has no `index.md`; that route 404s.
+5. **Documentation Map**: a table with `Section | Description` covering every section folder and `onboarding/`. Link each section to its `index.md` (`./02-architecture/index.md`); if a section has none (crisp), link its first page.
 6. **Key Files**: a table with `File | Purpose | Source` (citations per conventions).
 7. **Tech Stack**: a table with `Technology | Purpose`.
 
-## Step 3: Section Indexes and the Checker
+## Step 3: Generated Indexes and the Checker
 
-1. If `wiki/catalogue.json` exists, run `node wiki/scripts/gen-section-indexes.mjs wiki`. It writes each section's `index.md` (title = the section name, plus a table of its pages). Never write these by hand. It skips an `index.md` without the deep-wiki marker unless you pass `--force`.
-2. Run `node wiki/scripts/check-wiki.mjs wiki` (add `--mode crisp` for a crisp wiki) and fix every error in the page it names, then rerun. Conventions section 10 lists what it checks.
-
-Common fixes:
-
-| Problem | Fix |
-|---------|-----|
-| Missing frontmatter | Add `title` and `description` |
-| Title over 60 characters, or ending in `undefined` | Use the page or section name; move the sentence to `description` |
-| `{{ }}` outside code | Wrap the expression in backticks |
-| Table over 5 columns, or a long unbreakable cell | Split the table; cite `file.ext:lines` as the link text |
-| Broken relative link | Point it at a page that exists, or remove it |
-| `<br/>` or `<br />` in Mermaid | Replace with `<br>` |
-| Bare generics (`List<T>`, `Task<string>`) outside code fences | Wrap in backticks |
-| Light-mode Mermaid fills (`#fff…`, `#f…`, `#e…`) | Map to the dark palette (node `#2d333b`, cluster `#161b22`) and add `,color:#e6edf3` |
-| 4- or 5-digit hex colors in Mermaid | Expand to 6 digits |
-| `flowchart`/`graph` blocks with unbalanced brackets or quotes | Fix the syntax |
+1. Run `node wiki/scripts/gen-section-indexes.mjs wiki`. It writes each section's `index.md` from `catalogue.json` and `onboarding/index.md` from the guides that exist. Never write these by hand. Add `--force` in `regenerate` write mode.
+2. Run `node wiki/scripts/check-wiki.mjs wiki` and fix every error in the page it names, then rerun. Conventions section 10 lists the findings. When this skill runs on its own (`/deep-wiki:build`), fix what `--site` reports and only report the rest to the user.
 
 ## Step 4: Build (only when asked or when verifying)
 
 ```bash
-cd wiki && npm install && npm run build
+npm --prefix wiki install
+npm --prefix wiki run build
 ```
 
-Requires Node 22.12 or newer (Mermaid 12). `npm run build` runs the checker's site checks (`check-wiki.mjs . --site`: frontmatter, `{{ }}`, tags, Mermaid rules, links) and then `vitepress build`; `npm run check` runs every check. The output goes to `wiki/.vitepress/dist/`. Preview it with `npm run preview`. When the calling workflow says "no build" (crisp mode), skip this step and say so in the report.
+Requires Node 22.12 or newer (Mermaid 12). The build runs `check-wiki.mjs . --site` and then `vitepress build`; the output goes to `wiki/.vitepress/dist/`. Preview with `npm --prefix wiki run preview`, and look at a few diagrams: Mermaid syntax errors appear only in the browser. When the calling workflow says "no build" (crisp), skip this step and say so in the report.
+
+`wiki/package.json` scripts: `dev`, `build`, `preview`, `check` (all checks), `indexes` (generated indexes), `llms` (llms files).
 
 ## Known Gotchas
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `document is not defined` during build | DOM code in `enhanceApp()` | Keep DOM code in `setup()` hooks (the template does) |
-| Zoom never attaches | Mermaid renders after `onMounted` | The template polls for SVGs for 5 s after mount and after each route change |
-| Accent colors replaced by default blue | CSS overrides with `!important` | The template CSS skips elements with an inline `style` |
-| `Invalid end tag` / `Element is missing end tag` | Bare `<T>` or `<br/>` in Markdown | Step 3 |
-| Build fails with `... is not defined` or `Cannot read properties of undefined` while rendering a page | `{{ }}` in prose is evaluated by Vue | Put the expression in backticks (the template makes inline code `v-pre`) |
-| Sidebar group shows a sentence, or text ending in `undefined` | A hand-written section `index.md` with a bad `title` | Run `gen-section-indexes.mjs --force`; keep the template `config.mts` |
-| Tables or code spill into the right-hand outline | `display: table` on `.vp-doc table`, or an old `custom.css` | Use the template CSS (tables are `display: block; overflow-x: auto`) |
-| `Found dead link` fails the build | A relative link to a page that does not exist | Fix the link; do not set `ignoreDeadLinks: true` |
+| `Invalid end tag` / `Element is missing end tag` | Tag-shaped text such as `<T>` outside code | Wrap it in backticks; the checker reports it as `bare-tag` |
+| Build fails with `... is not defined` while rendering a page | `{{ }}` in prose is evaluated by Vue | Put the expression in backticks |
+| YAML error in frontmatter | Unquoted `title` or `description` containing `: ` or `#` | Double-quote both values |
+| `Found dead link` fails the build | A relative link to a page that does not exist, or to a file outside `wiki/` | Fix the link; do not set `ignoreDeadLinks: true` |
+| Sidebar group shows a sentence | A hand-written section `index.md` with a bad `title` | `node wiki/scripts/gen-section-indexes.mjs wiki --force` |
+| Tables or code spill into the right-hand outline | An old or edited `custom.css` | Rerun `init-wiki.mjs` with `--write-mode regenerate` |
+| Diagram shows "Syntax error in text" | Invalid Mermaid; nothing checks syntax before the browser | Fix the diagram source |
 | Preview shows old styles after a rebuild | `vitepress preview` caches `dist/` at start | Restart the preview |
 | `logo.svg` or `llms.txt` 404 on the deployed site | Files in `.vitepress/public/` | VitePress serves `wiki/public/` |
-| A light/dark toggle appears | `appearance: 'dark'` | Use `appearance: 'force-dark'` |
-| Broken assets on GitHub Pages | Wrong `base` | `'/<repo-name>/'` for project sites |
-| `isCustomElement` used to silence generics | Breaks rendering of real components | Escape generics instead |
+| Broken assets on GitHub Pages | Wrong `base` | `node wiki/scripts/init-wiki.mjs wiki --base /<repo-name>/` |
 | `npm install` fails with `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | `vitepress-plugin-mermaid` predates Mermaid 12 | Keep the template's `overrides` entry in `wiki/package.json` |
 | Diagrams re-laid out or restyled (ELK layout, "neo" look) | Mermaid 12 defaults | Keep `layout: 'dagre'` and `look: 'classic'` in the `mermaid` config |
+| A light/dark toggle appears | `appearance: 'dark'` | Keep `appearance: 'force-dark'` |

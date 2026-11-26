@@ -4,74 +4,77 @@ description: Use when the user wants an in-depth, evidence-backed investigation 
 license: MIT
 metadata:
   author: Microsoft (forked)
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Wiki Researcher
 
-You are an expert software engineer and systems analyst. Your job is to deeply understand codebases, tracing actual code paths and grounding every claim in evidence.
+Investigate one topic in a codebase in depth: trace the actual code paths, ground every claim in evidence, and say plainly what you have not traced.
 
-## When to Activate
+Load `deep-wiki:wiki-conventions` if it is not already loaded. Its evidence standard, citation formats (`file:line`), Mermaid rules, and read-only source rule apply and are not repeated here. Research never edits code and never runs the project's tests, builds, or scripts.
 
-- User asks "how does X work" with expectation of depth
-- User wants to understand a complex system spanning many files
-- User asks for architectural analysis or pattern investigation
+## Standard of Proof
 
-**First load `deep-wiki:wiki-conventions`.** It defines repository resolution (`REPO_URL`, `HOST`, `BRANCH`), citation formats, the dark Mermaid palette, VitePress-safe Markdown, the `wiki/` layout, and quality thresholds. Do not restate those rules here; follow them.
+| Claim | Evidence it needs |
+|-------|-------------------|
+| "X calls Y" | The call site, cited |
+| "Data flows through Z" | The trace: entry point, each transformation, destination |
+| "This is the entry point" | Where it is invoked (config, main, route registration) |
+| "These modules are coupled" | The import or dependency chain |
+| "This is dead code" | A search showing no call sites |
 
-## Core Invariants (NON-NEGOTIABLE)
+- Follow the chain: if A calls B calls C, read all three.
+- Every box and arrow in a diagram corresponds to code you have read.
+- Do not name a pattern ("this is MVC") until you have found each part.
+- If you have not read it, write "not traced yet", not a guess.
 
-### Depth Before Breadth
+## Process: Five Iterations
 
-- **TRACE ACTUAL CODE PATHS** — not guess from file names or conventions
-- **READ THE REAL IMPLEMENTATION** — not summarize what you think it probably does
-- **FOLLOW THE CHAIN** — if A calls B calls C, trace it all the way down
-- **DISTINGUISH FACT FROM INFERENCE** — "I read this" vs "I'm inferring because..."
+Each iteration takes a different lens and builds on the earlier ones. Never repeat a finding; never write a filler iteration.
 
-### Zero Tolerance for Shallow Research
+| # | Lens | Produce |
+|---|------|---------|
+| 1 | Structure | Components, boundaries, entry points |
+| 2 | Data flow and state | How data moves and where state lives |
+| 3 | Integration and dependencies | External connections and contracts, as a table |
+| 4 | Patterns and risks | Design patterns, trade-offs, technical debt, as a table |
+| 5 | Synthesis | Findings ranked by impact, with recommendations |
 
-- **NO Vibes-Based Diagrams** — Every box and arrow corresponds to real code you've read
-- **NO Assumed Patterns** — Don't say "this follows MVC" unless you've verified where the M, V, and C live
-- **NO Skipped Layers** — If asked how data flows A to Z, trace every hop
-- **NO Confident Unknowns** — If you haven't read it, say "I haven't traced this yet"
+Use a table for any structured result. Add a Mermaid diagram where it makes structure or flow clearer than prose would, each followed by its `<!-- Sources: ... -->` comment; do not add one to fill a quota.
 
-### Evidence Standard
+For every significant finding:
 
-| Claim Type | Required Evidence |
-|---|---|
-| "X calls Y" | File path + function name |
-| "Data flows through Z" | Trace: entry point → transformations → destination |
-| "This is the main entry point" | Where it's invoked (config, main, route registration) |
-| "These modules are coupled" | Import/dependency chain |
-| "This is dead code" | Show no call sites exist |
+1. State it in one sentence.
+2. Show the evidence, cited.
+3. Explain why it matters.
+4. Rate confidence: HIGH (read the code), MEDIUM (read part, inferred the rest), LOW (inferred from structure).
+5. Name what you would trace next.
 
-## Process: 5 Iterations
+Keep a running knowledge map across iterations: explored, partially explored, unexplored, open questions. Stay on the topic asked.
 
-Each iteration takes a different lens and builds on all prior findings:
+## The Final Report
 
-1. **Structural/Architectural view** — map the landscape, identify components, entry points. Include a `graph TB` architecture diagram.
-2. **Data flow / State management view** — trace data through the system. Include `sequenceDiagram` and/or `stateDiagram-v2`.
-3. **Integration / Dependency view** — external connections, API contracts. Include dependency graph and integration table.
-4. **Pattern / Anti-pattern view** — design patterns, trade-offs, technical debt, risks. Use tables to catalogue patterns found.
-5. **Synthesis / Recommendations** — combine all findings, provide actionable insights. Include summary tables ranking findings by impact.
+The final report is iteration 5 expanded to stand alone: a one-paragraph answer to the question, the ranked findings with citations and confidence, the diagrams and tables from earlier iterations that the findings depend on, the final knowledge map, and open questions. It does not replay iterations 1–4.
 
-**Each iteration should include at least 1 Mermaid diagram and 1 structured table** to make findings scannable and engaging.
+In a conversation, present each iteration as you finish it, then the final report.
 
-### For Every Significant Finding
+## Saving the Report (`--write` only)
 
-1. **State the finding** — one clear sentence
-2. **Show the evidence** — file paths, code references, call chains
-3. **Explain the implication** — why does this matter?
-4. **Rate confidence** — HIGH (read code), MEDIUM (read some, inferred rest), LOW (inferred from structure)
-5. **Flag open questions** — what would you need to trace next?
+Without `--write`, write no file. With it:
 
-## Rules
+1. Save the final report to `wiki/research/<topic-slug>.md` (kebab-case slug). If that file exists without the `<!-- generated by deep-wiki -->` marker, do not replace it; choose a new slug and say so.
+2. Start the file with:
 
-- NEVER repeat findings from prior iterations
-- ALWAYS cite files using the conventions citation format for the resolved `HOST`
-- ALWAYS provide substantive analysis — never just "continuing..."
-- Include Mermaid diagrams (conventions palette) when they clarify architecture or flow, each followed by `<!-- Sources: ... -->`
-- Keep a running knowledge map across iterations: Explored ✅, Partially Explored 🔶, Unexplored ❓, Key Findings 🔍, Open Questions ❔
-- When the user passes `--write`, also save the final report to `wiki/research/<topic-slug>.md` with frontmatter
-- Stay focused on the specific topic
-- Flag what you HAVEN'T explored — boundaries of your knowledge at all times
+   ```markdown
+   ---
+   title: "<Topic, at most 60 characters>"
+   description: "<One sentence: the question this report answers.>"
+   outline: deep
+   ---
+
+   # <Topic>
+   <!-- generated by deep-wiki -->
+   ```
+
+3. When `wiki/scripts/check-wiki.mjs` exists, run `node wiki/scripts/check-wiki.mjs wiki --page research/<topic-slug>.md` and fix every error.
+4. Tell the user the report appears under "Research" in the site sidebar after the next build.

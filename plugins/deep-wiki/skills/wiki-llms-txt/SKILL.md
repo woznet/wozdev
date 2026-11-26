@@ -9,131 +9,57 @@ metadata:
 
 # llms.txt Generator
 
-Generate `llms.txt` and `llms-full.txt` files that provide LLM-friendly access to wiki documentation, following the [llms.txt specification](https://llmstxt.org/).
+Produce the [llms.txt](https://llmstxt.org/) files for a wiki. A script builds every file from the wiki pages; you supply only the judgment the pages cannot: the project summary, the context an LLM would otherwise get wrong, and which pages are optional.
 
-## When This Skill Activates
+Load `deep-wiki:wiki-conventions` if it is not already loaded. Run every command from the repository root.
 
-- User asks to generate `llms.txt` or mentions the llms.txt standard
-- User wants to make documentation "LLM-friendly" or "LLM-readable"
-- User asks for a project summary file for language models
-- User mentions `llms-full.txt` or context-expanded documentation
+## Files
 
-**First load `deep-wiki:wiki-conventions`.** It defines repository resolution (`REPO_URL`, `HOST`, `BRANCH`), citation formats, the dark Mermaid palette, VitePress-safe Markdown, the `wiki/` layout, and quality thresholds. Do not restate those rules here; follow them.
+| File | Content |
+|------|---------|
+| `./llms.txt` | Root discovery file; links into `wiki/`. The only llms file at the repository root. |
+| `wiki/llms.txt` | Same list with wiki-relative `.md` links |
+| `wiki/llms-full.txt` | Every wiki page inlined in a `<doc>` block |
+| `wiki/public/llms.txt`, `wiki/public/llms-full.txt` | Deployment copies with links rewritten to site routes, served at `{base}llms.txt`. Written only when the wiki has a site (`wiki/.vitepress/config.mts`). |
 
-## llms.txt Format (Spec-Compliant)
+Never write or edit these files by hand. Change the input or the pages and rerun the script.
 
-The file follows the [llms.txt specification](https://llmstxt.org/):
+## Procedure
 
-```markdown
-# {Project Name}
+1. **Check the wiki exists.** The script needs `wiki/scripts/gen-llms.mjs` and at least one page. If `wiki/` has no pages, stop and suggest `/deep-wiki:crisp` or `/deep-wiki:generate`. If the pages exist but `wiki/scripts/` does not, run `/deep-wiki:build` first.
+2. **Read for judgment.** Read `wiki/catalogue.json` (if present), `wiki/index.md`, and the frontmatter `description` of each page. Do not read whole pages.
+3. **Write `wiki/.deep-wiki-llms.json`** (keep and commit it; later reruns reuse it). Every key is optional:
 
-> {Dense one-paragraph summary — what it does, who it's for, key technologies}
+   ```json
+   {
+     "summary": "One dense paragraph: what the project does, for whom, with which technologies.",
+     "context": ["A constraint or non-obvious fact an LLM would get wrong without being told."],
+     "optional": ["onboarding/executive-guide.md", "CONTRIBUTING.md"],
+     "descriptions": { "02-architecture/overview.md": "One sentence that replaces the page's own description." }
+   }
+   ```
 
-{Important context paragraphs — constraints, architectural philosophy, non-obvious things}
+   Paths in `optional` and `descriptions` are wiki-relative page paths; `optional` also accepts repository files.
+4. **Generate:** `node wiki/scripts/gen-llms.mjs wiki --input wiki/.deep-wiki-llms.json`
+5. **Check:** `node wiki/scripts/check-wiki.mjs wiki`, and read the findings whose rule is `llms`. Fix them by editing the input file or a page's frontmatter, then rerun steps 4 and 5. Findings under other rules belong to the pages, not to this skill; report them without fixing.
+6. **Report** the files the script wrote, any it skipped, and any note it printed.
 
-## {Section Name}
+## What Good Input Looks Like
 
-- [{Page Title}]({relative-path-to-md}): {One-sentence description of what the reader will learn}
+| Key | Good | Bad |
+|-----|------|-----|
+| `summary` | "Home Assistant app that runs declared PowerShell scripts through a dispatcher, with a web editor and a bundled HA integration." | "A powerful, flexible automation platform." |
+| `context` | "Scripts run in threads of one process, not separate processes, so module state is shared." | Restating the summary, or general facts about the language |
+| `descriptions` | "Request and result contract, per-source policy, and the output files a run leaves behind." | "Contract documentation" |
+| `optional` | Executive and PM guides, the changelog, research reports, contribution docs | Architecture or getting-started pages |
 
-## Optional
+Override a description only when the page's own is vague; the better fix is the page's frontmatter.
 
-- [{Page Title}]({relative-path-to-md}): {Description — these can be skipped for shorter context}
-```
+## What the Script Decides
 
-### Key Rules
-
-1. **H1** — Project name (exactly one, required)
-2. **Blockquote** — Dense, specific summary (required). Must be unique to THIS project.
-3. **Context paragraphs** — Non-obvious constraints, things LLMs would get wrong without being told
-4. **H2 sections** — Organized by topic, each with a list of `[Title](url): Description` entries
-5. **"Optional" H2** — Special meaning: links here can be skipped for shorter context
-6. **Relative links** — All paths relative to wiki directory
-7. **Dynamic** — ALL content derived from actual wiki pages, not templates
-8. **Section order** — Most important first: Onboarding → Architecture → Getting Started → Deep Dive → Optional
-9. **Exact link lines** — `- [Title](url): Description`: one space after the dash, no space inside the brackets, one space after the colon. Take the title from the page's frontmatter and trim it.
-10. **Size budget** — `llms.txt` stays under 5 KB. Keep each description to one clause (about 15 words). If the file is still over budget, list each section's `index.md` in place of its individual pages and move the rest to `## Optional`, or drop them; `llms-full.txt` still carries every page.
-
-### Description Quality
-
-| ❌ Bad | ✅ Good |
-|--------|---------|
-| "Architecture overview" | "System architecture showing how Orleans grains communicate via message passing with at-least-once delivery" |
-| "Getting started guide" | "Prerequisites, local dev setup with Docker Compose, and first API call walkthrough" |
-| "The API reference" | "REST endpoints with auth requirements, rate limits, and request/response schemas" |
-
-## llms-full.txt Format
-
-Same structure as `llms.txt` but with full content inlined:
-
-```markdown
-# {Project Name}
-
-> {Same summary}
-
-{Same context}
-
-## {Section Name}
-
-<doc title="{Page Title}" path="{relative-path}">
-{Full markdown content — frontmatter stripped, citations and diagrams preserved}
-</doc>
-```
-
-### Inlining Rules
-
-- **Strip YAML frontmatter** (`---` blocks) from each page
-- **Preserve Mermaid diagrams** — keep `` ```mermaid `` fences intact
-- **Preserve citations** — all `[file:line](URL)` links stay as-is
-- **Preserve tables** — all markdown tables stay intact
-- **Preserve `<!-- Sources: -->` comments** — these provide diagram provenance
-- **Rebase relative links**. A page's relative links resolve against that page's folder, but once inlined they resolve against `wiki/llms-full.txt`. Rewrite each relative link (Markdown links and images) to the wiki-relative path of its target. For example, `../02-architecture/auth.md#tokens` in `onboarding/contributor-guide.md` becomes `./02-architecture/auth.md#tokens`. Keep anchors. Leave external URLs, absolute paths, and same-page `#anchor` links unchanged.
-
-## Prerequisites
-
-This skill works best when wiki pages already exist (via `/deep-wiki:generate` or `/deep-wiki:page`). If no wiki exists yet:
-
-1. Suggest running `/deep-wiki:generate` first
-2. OR generate a minimal `llms.txt` from README + source code scan (without wiki page links)
-
-## Output Files
-
-Generate these files:
-
-| File | Purpose | Discoverability |
-|------|---------|-----------------|
-| `./llms.txt` | Root discovery file | Standard path per llms.txt spec. GitHub MCP `get_file_contents` and `search_code` find this first. |
-| `wiki/llms.txt` | Wiki-relative links | For VitePress deployment and wiki-internal navigation. |
-| `wiki/llms-full.txt` | Full inlined content | Comprehensive reference for agents needing all docs in one file. |
-| `wiki/public/llms.txt`, `wiki/public/llms-full.txt` | Deployment copies (wiki links rewritten to site routes) | Reachable at `/llms.txt` on the deployed wiki. |
-
-The root `./llms.txt` links into `wiki/` (e.g., `[Guide](./wiki/onboarding/contributor-guide.md)`). The `wiki/llms.txt` uses wiki-relative paths (e.g., `[Guide](./onboarding/contributor-guide.md)`).
-
-Also write deployment copies to `wiki/public/` so the deployed site serves them at `/llms.txt` and `/llms-full.txt`. That folder is the VitePress public folder; `.vitepress/public/` is not served.
-
-The site serves HTML pages, not the `.md` sources, so both deployment copies rewrite wiki links to built site routes. Read `base` (the `BASE` constant) and `cleanUrls` from `wiki/.vitepress/config.mts`. Then turn `./onboarding/contributor-guide.md` into `{base}onboarding/contributor-guide` (add `.html` when `cleanUrls` is off), and `./02-architecture/index.md` into `{base}02-architecture/`. Keep anchors (`#section`). Leave external URLs and source-file citations unchanged.
-
-- **`wiki/public/llms.txt`**: the text of `wiki/llms.txt`, with its wiki links rewritten this way.
-- **`wiki/public/llms-full.txt`**: the text of `wiki/llms-full.txt` (whose links are already rebased to wiki-relative paths), with its wiki links rewritten the same way. Everything else stays identical.
-
-`wiki/llms.txt` and the root `./llms.txt` keep their `.md` links, for repository and agent discovery.
-
-**Marker and overwrite guard.** Put `<!-- generated by deep-wiki -->` on the line after the H1 in every file. Before writing any of the five files, check whether it already exists. Overwrite it only if it contains that marker; otherwise skip it and say so in the report. The one exception: the calling workflow is in `regenerate` mode and the user chose to replace unmarked files (conventions section 8).
-
-**Optional links.** List `changelog.md`, `CONTRIBUTING.md`, or similar pages under `## Optional` only if the file exists. Never link a page you have not seen on disk.
-
-## Validation Checklist
-
-Before finalizing:
-
-- [ ] All linked files in `llms.txt` actually exist
-- [ ] All `<doc>` blocks in `llms-full.txt` have real content (not empty)
-- [ ] Blockquote is specific to this project (not generic boilerplate)
-- [ ] Sections ordered by importance
-- [ ] No duplicate page entries across sections
-- [ ] "Optional" section only contains truly optional content
-- [ ] `llms.txt` is under 5 KB, and `node wiki/scripts/check-wiki.mjs wiki` reports no `llms` findings (size, link-line format, missing targets) when the script is present
-- [ ] `llms-full.txt` contains all wiki pages
-- [ ] Relative links inside `llms-full.txt` are rebased to wiki-relative paths and point at files that exist
-- [ ] `wiki/public/llms-full.txt` matches `wiki/llms-full.txt` except that its wiki links are site routes
-- [ ] Every wiki link in `wiki/public/llms.txt` and `wiki/public/llms-full.txt` is a site route under `base` (no `.md` links)
-- [ ] Every generated file carries the marker; no file without the marker was overwritten
+- **Order:** Onboarding, then catalogue sections in catalogue order (numbered folders when there is no catalogue), then other folders, then root pages under `More`, then `## Optional`.
+- **Link lines:** exactly `- [Title](url): Description`, titles from frontmatter.
+- **Size:** each `llms.txt` stays under 5 KB. Over budget, the script shortens descriptions, then lists a section's index page in place of its pages, then moves pages to `## Optional`. If it prints "still over 5 KB", shorten `summary` and `context`.
+- **Marker:** `<!-- generated by deep-wiki -->` on the line after the H1 of every file.
+- **Overwrite:** the four files under `wiki/` are always replaced. The root `./llms.txt` is replaced only when it carries the marker. If the script reports it skipped an unmarked root file, tell the user; pass `--force` only when the user chose to replace it (the conventions' overwrite rules).
+- **`llms-full.txt`** contains every page the checker counts as a wiki page, with relative links rebased.
