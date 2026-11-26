@@ -91,8 +91,14 @@ function readScalar(raw) {
   if (/: |:$| #/.test(raw) || /^[[\]{}>|*&!%@`#,]/.test(raw) || /^[-?:] /.test(raw)) {
     return { value: raw, problem: 'must be wrapped in double quotes (it contains YAML syntax)' }
   }
+  if (NOT_A_STRING.test(raw)) {
+    return { value: raw, problem: `is read by YAML as a boolean, number, date or null, not as text; write it as "${raw}"` }
+  }
   return { value: raw, problem: null }
 }
+
+// Plain scalars a YAML parser turns into something other than a string.
+const NOT_A_STRING = /^(?:y|yes|n|no|true|false|on|off|null|~|[-+]?(?:\d[\d_]*)(?:\.\d*)?(?:e[-+]?\d+)?|[-+]?\.\d+|0x[0-9a-f]+|0o[0-7]+|[-+]?\.(?:inf|nan)|\d{4}-\d{1,2}-\d{1,2}(?:[tT ].*)?)$/i
 
 /**
  * Flat `key: value` frontmatter. `data` is null when the file has no frontmatter block.
@@ -103,13 +109,20 @@ export function parseFrontmatter(text) {
   if (!m) return { data: null, lineCount: 0, issues: [] }
   const data = {}
   const issues = []
-  for (const line of m[1].split(/\r?\n/)) {
+  const lines = m[1].split(/\r?\n/)
+  lines.forEach((line, i) => {
     const kv = line.match(/^([A-Za-z_][\w-]*):(?:\s+(.*))?$/)
-    if (!kv) continue
-    const { value, problem } = readScalar((kv[2] ?? '').trim())
-    if (problem && (kv[1] === 'title' || kv[1] === 'description')) issues.push({ key: kv[1], problem })
+    if (!kv) return
+    const checked = kv[1] === 'title' || kv[1] === 'description'
+    const raw = (kv[2] ?? '').trim()
+    let { value, problem } = readScalar(raw)
+    // "description: This is long\n  continued here" is one YAML scalar; this reader sees the first line only.
+    const continued = /^[ \t]+\S/.test(lines[i + 1] ?? '')
+    if (!problem && continued && raw[0] !== '"' && raw[0] !== "'") problem = 'continues on the next line; write it on one line in double quotes'
+    if (Object.hasOwn(data, kv[1])) problem ='appears twice; YAML rejects a duplicate key'
+    if (problem && checked) issues.push({ key: kv[1], problem })
     data[kv[1]] = value
-  }
+  })
   return { data, lineCount: m[0].split('\n').length - 1, issues }
 }
 
@@ -154,6 +167,19 @@ export function sectionDirProblem(dir) {
   if (bad !== undefined) return `folder "${bad}" must be lowercase kebab-case`
   const reserved = segments.find((s) => RESERVED_DIR_SEGMENTS.has(s))
   return reserved ? `folder "${reserved}" is reserved (dist, node_modules, public, scripts)` : null
+}
+
+/**
+ * Why a catalogue page `path` cannot be used, or null when it is fine: the folder rules of
+ * sectionDirProblem, then a lowercase kebab-case file name ending in .md.
+ */
+export function pagePathProblem(p) {
+  const segments = String(p).split('/')
+  const file = segments.pop()
+  if (!segments.length) return 'must be inside a section folder'
+  const folder = sectionDirProblem(segments.join('/'))
+  if (folder) return folder
+  return /^[a-z0-9]+(-[a-z0-9]+)*\.md$/.test(file) ? null : `file name "${file}" must be lowercase kebab-case and end in .md`
 }
 
 /**
@@ -284,6 +310,34 @@ export function gitTopLevel(dir) {
 }
 
 /**
+ * The repository root a wiki belongs to, and how it was found:
+ *   { root, source: 'flag' }   --repo was given
+ *   { root, source: 'state' }  the state file records the wiki's path below the root (`wikiDir`),
+ *                              and that path matches where the wiki really is
+ *   { root, source: 'git' }    the git top level that contains the wiki
+ *   { root: null, source: null } none of these; nothing is guessed
+ * `wikiDir` need not exist yet: git is asked about its nearest existing ancestor.
+ */
+export function resolveRepoRoot(wikiDir, { repo, state } = {}) {
+  if (repo) return { root: path.resolve(repo), source: 'flag' }
+  const recorded = state ?? loadState(wikiDir)
+  const real = realPath(wikiDir)
+  const below = typeof recorded.wikiDir === 'string' ? recorded.wikiDir.replace(/\\/g, '/').replace(/^\.\/+|\/+$/g, '') : ''
+  if (below === '.') return { root: real, source: 'state' }
+  if (below && !below.split('/').some((seg) => seg === '..' || seg === '')) {
+    const segments = below.split('/')
+    const tail = posix(real).split('/').slice(-segments.length)
+    if (segments.every((seg, i) => seg.toLowerCase() === tail[i]?.toLowerCase())) {
+      return { root: path.resolve(real, ...segments.map(() => '..')), source: 'state' }
+    }
+  }
+  let existing = path.resolve(wikiDir)
+  while (!fs.existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing)
+  const top = gitTopLevel(existing)
+  return top ? { root: top, source: 'git' } : { root: null, source: null }
+}
+
+/**
  * True when the deep-wiki marker is one of the first five non-blank lines after the frontmatter,
  * where the generators put it. A file that merely quotes the marker further down is not ours.
  */
@@ -299,7 +353,8 @@ export function isMarked(text) {
 /**
  * Line-by-line code-fence tracker shared by the checker, the llms generator, and the site config.
  * Call the returned function with each line in order; it answers
- *   { kind: 'open', lang } | { kind: 'close' } | { kind: 'code' } | { kind: 'text' }.
+ *   { kind: 'open', lang, info } | { kind: 'close' } | { kind: 'code' } | { kind: 'text' }
+ * (`info` is the text after the fence marks as written; `lang` is its first word, lowercased).
  * A fence may sit inside a blockquote or a list item (where it is indented past three spaces).
  * A line such as "```npm test``` runs tests." is inline code: a backtick fence has no backtick
  * in its info string.
@@ -324,7 +379,8 @@ export function createFenceScanner() {
     const open = (item ? bare.slice(item[0].length) : bare).match(/^(\s*)(`{3,}|~{3,})(.*)$/)
     if (open && (item || inList || width(open[1]) <= 3) && !(open[2][0] === '`' && open[3].includes('`'))) {
       fence = { char: open[2][0], len: open[2].length }
-      return { kind: 'open', lang: (open[3].trim().split(/[\s{:]/)[0] ?? '').toLowerCase() }
+      const info = open[3].trim()
+      return { kind: 'open', lang: (info.split(/[\s{:]/)[0] ?? '').toLowerCase(), info }
     }
     return { kind: 'text' }
   }

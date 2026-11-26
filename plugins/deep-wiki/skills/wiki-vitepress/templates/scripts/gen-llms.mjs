@@ -31,7 +31,6 @@ import {
   MARKER,
   ONBOARDING_ORDER,
   createFenceScanner,
-  gitTopLevel,
   isMarked,
   listPages,
   loadCatalogue,
@@ -40,9 +39,9 @@ import {
   posix,
   readConfigConst,
   readText,
-  realPath,
   relativeInside,
   resolveDir,
+  resolveRepoRoot,
   resolveSite,
 } from './lib.mjs'
 
@@ -131,22 +130,6 @@ function* bodyLines(text) {
   for (const line of text.split('\n')) yield { line, code: fenceAt(line).kind !== 'text' }
 }
 
-/**
- * The repository root: `--repo`, else the root the state file implies (`wikiDir` is the wiki's
- * path below it), else the git top level. Null when none is known; the parent folder is never guessed.
- */
-function findRepoRoot(wikiDir, explicit, state) {
-  if (explicit) return path.resolve(explicit)
-  const real = realPath(wikiDir)
-  const recorded = typeof state.wikiDir === 'string' ? state.wikiDir.replace(/\\/g, '/').replace(/^\.\/+|\/+$/g, '') : ''
-  if (recorded === '.') return real
-  if (recorded && !recorded.split('/').includes('..')) {
-    const segments = recorded.split('/')
-    const tail = posix(real).split('/').slice(-segments.length)
-    if (segments.every((s, i) => s.toLowerCase() === tail[i]?.toLowerCase())) return path.resolve(real, ...segments.map(() => '..'))
-  }
-  return gitTopLevel(wikiDir)
-}
 
 export function genLlms(options) {
   const wikiDir = path.resolve(options.wikiDir ?? '.')
@@ -154,7 +137,9 @@ export function genLlms(options) {
   const state = loadState(wikiDir)
   const notes = []
 
-  const repoRoot = findRepoRoot(wikiDir, options.repo, state)
+  // --repo, else the root the state file records, else the git top level. Null when none is
+  // known: the parent folder is never guessed, and the root llms.txt is then not written.
+  const repoRoot = resolveRepoRoot(wikiDir, { repo: options.repo, state }).root
   // '' when the wiki folder is the repository root; null when no repository root is known.
   const wikiRel = repoRoot ? relativeInside(repoRoot, wikiDir) : null
   if (repoRoot && wikiRel === null) throw new UsageError(`${posix(wikiDir)} is not inside the repository root ${posix(repoRoot)}`)

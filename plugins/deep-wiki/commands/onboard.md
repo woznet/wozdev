@@ -7,7 +7,7 @@ argument-hint: "[contributor|staff|executive|pm ...]"
 
 Load `deep-wiki:wiki-conventions`, then `deep-wiki:wiki-onboarding`, and follow them to write the guides to `wiki/onboarding/`.
 
-1. **Scripts.** If `wiki/scripts/check-wiki.mjs` is missing, load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10 with depth `full`.
+1. **Scripts.** Load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10. It gives the flags for a first run and for a later one.
 2. **Which guides.** The depth is the one recorded in `wiki/.deep-wiki.json`, else `full`.
 
    | Arguments | Full-depth wiki | Crisp wiki |

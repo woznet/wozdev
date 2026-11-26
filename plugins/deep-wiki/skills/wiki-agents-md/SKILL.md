@@ -27,7 +27,7 @@ Report every file written, replaced, and skipped.
 
 ## Target Folders
 
-By default: the repository root, `wiki/` (when it holds a deep-wiki site), and each monorepo package root (`packages/*`, `apps/*`, `services/*`, or a folder with its own build manifest that is built on its own). If the caller names folders, use only those.
+By default: the repository root, `wiki/` (when the wiki has pages), and each monorepo package root (`packages/*`, `apps/*`, `services/*`, or a folder with its own build manifest that is built on its own). If the caller names folders, use only those.
 
 Do not write one for `src/`, `tests/`, `lib/`, or `.github/` unless asked: agents read the nearest `AGENTS.md` up the tree, so a nested file is only worth having when the folder's commands or rules differ from its parent's. A nested file holds only what differs.
 
@@ -136,14 +136,15 @@ Never hand-edit a generated `index.md`, the llms files, or `scripts/`.
 - `{{ }}` and tag-shaped text such as `List<T>` only inside backticks or code fences.
 - Mermaid: `<br>` not `<br/>`, `autonumber` in every `sequenceDiagram`, dark palette, each diagram followed by `<!-- Sources: ... -->`.
 - Tables have at most 5 columns.
-- Links between pages are relative `.md` links that resolve; a broken one fails the build.
+- Links between pages are relative `.md` links that resolve; a broken one fails the build. Never link `README.md`, `AGENTS.md`, or `CLAUDE.md`.
+- Diagrams open with exactly ```` ```mermaid ````; a `|` inside inline code in a table row is written `\|`.
 - Every claim cites a source file and line that exist.
 ```
 
 Adapt the template to the wiki in front of you:
 
 - **No `wiki/catalogue.json`** (a crisp wiki): drop the `catalogue.json` row, write the pages row as "`NN-section/*.md` | Pages.", drop step 1 of "Adding or Changing a Page", and say the index command regenerates the onboarding index only.
-- **No `wiki/.vitepress/config.mts`**: drop the Install, Preview, and Build rows and the `.vitepress/` row.
+- **No `wiki/.vitepress/config.mts`** (no site, so no `wiki/package.json`): drop the Install, Preview, and Build rows and the `.vitepress/` row, and write the other commands in their script form everywhere in the file: `node wiki/scripts/check-wiki.mjs wiki`, `node wiki/scripts/gen-section-indexes.mjs wiki`, `node wiki/scripts/gen-llms.mjs wiki`.
 - List the llms row only if the llms files exist or this run will write them.
 
 ## `CLAUDE.md`

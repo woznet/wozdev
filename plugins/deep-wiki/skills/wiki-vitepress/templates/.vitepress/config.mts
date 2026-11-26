@@ -224,9 +224,8 @@ export default withMermaid(
     base,
     cleanUrls: true,
     lastUpdated: true,
-    // A broken link between wiki pages fails the build. Exempt: localhost URLs and the
-    // agent/readme files that srcExclude keeps out of the site.
-    ignoreDeadLinks: [/^https?:\/\/(localhost|127\.0\.0\.1)/, /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/],
+    // A broken link between wiki pages fails the build. Only localhost URLs are exempt.
+    ignoreDeadLinks: [/^https?:\/\/(localhost|127\.0\.0\.1)/],
     // Agent and readme files are not pages at any depth; scripts/ (root only) holds the wiki's
     // Node tools. VitePress itself already skips every dist/ and node_modules/ folder.
     srcExclude: ['**/AGENTS.md', '**/CLAUDE.md', '**/README.md', 'scripts/**'],

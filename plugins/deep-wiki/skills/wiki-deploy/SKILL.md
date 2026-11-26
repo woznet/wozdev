@@ -31,7 +31,7 @@ To find another Pages workflow:
 grep -rlE "deploy-pages|upload-pages-artifact" .github/workflows
 ```
 
-Each file it prints publishes to Pages. No output, or a "No such file or directory" error, means there is none.
+Ignore `deploy-wiki.yml` itself in the output. Every other file it prints publishes to Pages. No other file, no output, or a "No such file or directory" error means there is none.
 
 ## Step 2: Base Path
 
@@ -144,5 +144,5 @@ Tell the user:
 | Workflow never runs | The push didn't touch `wiki/**`, or it went to a branch other than `BRANCH` |
 | The run fails with "Get Pages site failed", "Pages not enabled", or a 404 from Pages | Do the Settings → Pages step |
 | Mermaid diagrams missing | `mermaid` and `vitepress-plugin-mermaid` missing from `wiki/package.json` |
-| `npm ci` / `npm install`: `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | The `overrides` entry for `vitepress-plugin-mermaid` is missing from `wiki/package.json`; restore it with `/deep-wiki:build` |
+| `npm ci` / `npm install`: `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | The `overrides` entry for `vitepress-plugin-mermaid` is missing from `wiki/package.json`. `/deep-wiki:build` keeps an existing `package.json`, so restore the entry from the template: load `deep-wiki:wiki-vitepress` and run `node "<vitepress skill dir>/templates/scripts/init-wiki.mjs" wiki --write-mode regenerate`. That replaces the whole scaffold (config, theme, `package.json`, `.gitignore`, logo; the base is kept), so tell the user first |
 | `EBADENGINE` or a Mermaid build error on old Node | Mermaid 12 needs Node 22.12+; keep `node-version` at 22.12 or newer |

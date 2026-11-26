@@ -13,7 +13,9 @@
 //                           frontmatter, {{ }}, tags, Mermaid rules, links, placeholders, landing page.
 //                           No catalogue, citation, threshold, table, llms, or leftover checks.
 //   --catalogue-only        validate catalogue.json alone (before any page exists)
-//   --repo <path>           source repository root (default: git toplevel, else the parent folder)
+//   --repo <path>           source repository root (default: the root the state file records, else the
+//                           git top level; with neither, citations are checked against the wiki's
+//                           parent folder and the summary says so)
 //   --repo-url <url|none>   repository web URL; links under it are source citations
 //                           (default: REPO_URL in .vitepress/config.mts, else the state file)
 //   --branch <name>         default branch used in citation links (default: as for --repo-url)
@@ -35,6 +37,7 @@ import {
   createFenceScanner,
   gitTopLevel,
   isMarked,
+  pagePathProblem,
   listPages,
   loadCatalogue,
   loadState,
@@ -43,6 +46,7 @@ import {
   readText,
   relativeInside,
   repoUrlFromArg,
+  resolveRepoRoot,
   resolveSite,
   sectionDirProblem,
   walkCatalogue,
@@ -86,8 +90,25 @@ const ASSET_EXTENSIONS = new Set(
     'js json jsonld m4a man mid midi mjs mov mp2 mp3 mp4 mpe mpeg mpg mpp oga ogg ogv ogx opus otf p10 p7c p7m p7s pdf ' +
     'png ps qt roff rtf rtx ser svg t tif tiff tr ts tsv ttf txt vtt wav weba webm webp woff woff2 xhtml xml yaml yml zip').split(' '),
 )
-// Files the site config keeps out of the build and exempts from dead-link checks.
-const EXEMPT_LINK = /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/
+// Files the site config keeps out of the build: a link to one never resolves on the site.
+const NOT_A_PAGE_LINK = /(^|\/)(AGENTS|CLAUDE|README)(\.md)?$/
+// File names with no extension that are still clearly files: "(Dockerfile:12)" is a citation.
+const EXTENSIONLESS_FILES = new Set(
+  ('Dockerfile Containerfile Makefile GNUmakefile Jenkinsfile Procfile Gemfile Rakefile Vagrantfile Brewfile Justfile ' +
+    'Tiltfile Earthfile Caddyfile LICENSE LICENCE NOTICE COPYING CODEOWNERS AUTHORS CHANGELOG VERSION').split(' '),
+)
+// Tags that start a raw HTML block in Markdown. Until the next blank line nothing inside is
+// Markdown, so backticks there are literal text and protect nothing.
+const HTML_BLOCK_START = new RegExp(
+  '^ {0,3}</?(?:address|article|aside|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|' +
+    'figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|main|menu|nav|ol|optgroup|option|p|pre|' +
+    'search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|ul)(?:\\s|/?>|$)',
+  'i',
+)
+/** A GFM table delimiter row: "|---|:-:|". A bare "---" is a rule or a heading underline, not a table. */
+const isDelimiterRow = (text) => text.includes('|') && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(text)
+/** Table cells as GFM splits them: on every pipe that is not backslash-escaped, in or out of backticks. */
+const splitCells = (line) => line.split(/(?<!\\)\|/)
 const LIGHT_COLOR_NAMES = new Set(
   ('white whitesmoke snow ivory beige linen seashell floralwhite ghostwhite aliceblue azure mintcream honeydew lavender ' +
     'lightyellow lightblue lightgreen lightgray lightgrey lightcyan lightpink yellow pink cyan aqua lime gold silver ' +
@@ -132,9 +153,13 @@ function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: GIT_MAX_BUFFER })
 }
 
-function findRepoRoot(wikiDir, explicit) {
-  if (explicit) return path.resolve(explicit)
-  return gitTopLevel(wikiDir) ?? path.dirname(wikiDir)
+/**
+ * Where cited files are looked up. With no --repo, no recorded root, and no git, the wiki's
+ * parent folder is the only candidate: `guessed` is then true and the summary says so.
+ */
+function findRepoRoot(wikiDir, explicit, state) {
+  const { root } = resolveRepoRoot(wikiDir, { repo: explicit, state })
+  return root ? { repoRoot: root, guessed: false } : { repoRoot: path.dirname(wikiDir), guessed: true }
 }
 
 const gitStatus = (repoRoot) => git(repoRoot, ['status', '--porcelain', '--untracked-files=all'])
@@ -142,7 +167,7 @@ const gitStatus = (repoRoot) => git(repoRoot, ['status', '--porcelain', '--untra
 /** Save the working-tree state so a later `--baseline` run can tell what the run left behind. */
 export function writeBaseline(options) {
   const wikiDir = path.resolve(options.wikiDir ?? '.')
-  const repoRoot = findRepoRoot(wikiDir, options.repo)
+  const { repoRoot } = findRepoRoot(wikiDir, options.repo)
   let status
   try {
     status = gitStatus(repoRoot)
@@ -233,13 +258,16 @@ function scanPage(source) {
   const fenceAt = createFenceScanner()
   let block = null
   let vpre = false
+  let inTable = false // inside a GFM table (header row through the last row)
+  let inHtml = false // inside a raw HTML block (opening tag line through the next blank line)
   for (let i = fm.lineCount; i < lines.length; i++) {
     const line = lines[i]
     const n = i + 1
     // Inside an HTML comment nothing opens a fence; the scanner is not shown those lines.
     const step = !block && comment.open ? { kind: 'text' } : fenceAt(line)
     if (step.kind === 'open') {
-      block = { lang: step.lang, start: n, end: n, lines: [] }
+      block = { lang: step.lang, info: step.info, start: n, end: n, lines: [] }
+      inTable = inHtml = false
       continue
     }
     if (block) {
@@ -259,8 +287,16 @@ function scanPage(source) {
       continue
     }
     const startsInComment = comment.open
-    raw.push({ n, text: line })
-    prose.push({ n, text: blankComments(stripInlineCode(line), comment) })
+    if (!line.trim()) inTable = inHtml = false
+    else if (!inTable && !inHtml && !startsInComment) {
+      if (line.includes('|') && isDelimiterRow(lines[i + 1] ?? '')) inTable = true
+      else if (HTML_BLOCK_START.test(line)) inHtml = true
+    }
+    // What the reader's browser gets as text rather than code. In a raw HTML block backticks are
+    // literal; in a table row a code span cannot cross a cell boundary.
+    const visible = inHtml ? line : inTable ? splitCells(line).map(stripInlineCode).join('|') : stripInlineCode(line)
+    raw.push({ n, text: line, table: inTable })
+    prose.push({ n, text: blankComments(visible, comment), html: inHtml })
     const h = startsInComment ? null : line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/)
     if (h) headings.push(h[1])
   }
@@ -308,8 +344,10 @@ function parseSourceUrl(url, repoUrl, branch) {
   }
   const adoPath = u.searchParams.get('path')
   if (adoPath && u.pathname.includes('/_git/')) {
-    const start = Number(u.searchParams.get('line')) || null
-    return { candidates: [adoPath.replace(/^\/+/, '')], start, end: Number(u.searchParams.get('lineEnd')) || start }
+    // "line=0" must survive as 0 so it can be reported: line numbers start at 1.
+    const number = (key) => (/^\d+$/.test(u.searchParams.get(key) ?? '') ? Number(u.searchParams.get(key)) : null)
+    const start = number('line')
+    return { candidates: [adoPath.replace(/^\/+/, '')], start, end: number('lineEnd') ?? start }
   }
   const blob = u.pathname.match(/\/(?:-\/)?blob\/(.+)$/)
   if (!blob) return null
@@ -336,10 +374,13 @@ function parseCitation(item) {
 
 /**
  * A name that reads as a file even before we know it exists: its last segment has a lettered
- * extension. "(example.com:443)", "(db.internal:5432)" and "(library/postgres:16)" do not.
+ * extension or is a well-known extensionless file (Dockerfile, Makefile, LICENSE, ...).
+ * "(example.com:443)", "(db.internal:5432)" and "(library/postgres:16)" do not.
  */
 const looksLikeFile = (p) => {
-  const ext = path.posix.basename(p).match(/\.([A-Za-z][\w+-]*)$/)?.[1]
+  const name = path.posix.basename(p)
+  if (EXTENSIONLESS_FILES.has(name)) return true
+  const ext = name.match(/\.([A-Za-z][\w+-]*)$/)?.[1]
   return Boolean(ext) && (p.includes('/') || !HOST_LIKE_EXTENSIONS.has(ext.toLowerCase()))
 }
 
@@ -355,12 +396,16 @@ const hexLuminance = (hex) => {
   const full = hex.length === 3 ? hex.replace(/./g, '$&$&') : hex
   return luminance([0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)))
 }
-/** True for `rgb(...)` or `hsl(...)` text that paints a light color. */
+/** True for `rgb(...)` or `hsl(...)` text that paints a light color. A faint overlay (alpha under 0.35) is not one. */
 function isLightFunction(text) {
   const m = text.match(/^(rgb|hsl)a?\(([^)]*)\)$/i)
   if (!m) return false
   const parts = m[2].split(/[\s,/]+/).filter(Boolean)
   if (parts.length < 3) return false
+  if (parts[3] !== undefined) {
+    const alpha = parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3])
+    if (alpha < 0.35) return false
+  }
   if (m[1].toLowerCase() === 'hsl') return parseFloat(parts[2]) > 60
   return luminance(parts.slice(0, 3).map((p) => (p.endsWith('%') ? (parseFloat(p) * 255) / 100 : parseFloat(p)))) > 0.4
 }
@@ -382,7 +427,7 @@ export function checkWiki(options) {
   const opts = { pages: [], site: false, catalogueOnly: false, pending: false, source: true, ...options }
   opts.mode = opts.mode ?? (THRESHOLDS[state.depth] ? state.depth : 'full')
   if (!THRESHOLDS[opts.mode]) throw new UsageError(`mode must be full or crisp, got ${opts.mode}`)
-  const repoRoot = findRepoRoot(wikiDir, opts.repo)
+  const { repoRoot, guessed: repoRootGuessed } = findRepoRoot(wikiDir, opts.repo, state)
   const site = resolveSite(wikiDir, state)
   const repoUrl = opts.repoUrl === undefined ? site.repoUrl : repoUrlFromArg(opts.repoUrl)
   const branch = String(opts.branch ?? site.branch)
@@ -485,6 +530,10 @@ export function checkWiki(options) {
       peers.add(node.title)
       // Names and descriptions are copied into page titles and prose, where Vue reads tags and {{ }}.
       const unsafe = (text) => /[<>]|\{\{|\}\}/.test(String(text ?? ''))
+      // A line break in these ends up inside generated frontmatter and dispatch prompts.
+      for (const key of ['name', 'description', 'prompt']) {
+        if (typeof node[key] === 'string' && /[\r\n]/.test(node[key])) cat(`"${label}": ${key} must be a single line (no line breaks)`)
+      }
       if (!node.name || !String(node.name).trim()) cat(`"${label}": missing name`)
       else if (String(node.name).length > TITLE_MAX) cat(`"${label}": name is over ${TITLE_MAX} characters`)
       else if (unsafe(node.name)) cat(`"${label}": name must not contain <, >, {{ or }}`)
@@ -506,7 +555,8 @@ export function checkWiki(options) {
         const p = node.path.replace(/\\/g, '/')
         if (leafPaths.has(p)) cat(`"${label}": path ${p} is used twice`)
         leafPaths.add(p)
-        if (!p.endsWith('.md')) cat(`"${label}": path must end in .md`)
+        const pathProblem = p.endsWith('.md') ? pagePathProblem(p) : 'must end in .md'
+        if (pathProblem) cat(`"${label}": path ${p} ${pathProblem}`)
         if (path.posix.basename(p) === 'index.md') cat(`"${label}": index.md is generated for every section; give the page its own name`)
         if (!ctx.parentDir) cat(`"${label}": page is not inside a section`)
         else if (!p.startsWith(`${ctx.parentDir}/`)) cat(`"${label}": path ${p} is not inside its section folder ${ctx.parentDir}/`)
@@ -594,17 +644,18 @@ export function checkWiki(options) {
     const kind = kindOf(rel)
     const dir = path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel)
 
-    const checkInterpolation = (n, text, where) => {
+    const HTML_HINT = 'this line is in a raw HTML block, where Markdown is off and backticks protect nothing: leave a blank line after the opening tag'
+    const checkInterpolation = (n, text, where, fix = 'put it in backticks') => {
       if (/\{\{|\}\}/.test(text) && !/<[a-z][^>]*\sv-pre\b[^>]*>/i.test(text)) {
-        error(rel, n, 'interpolation', `\`{{\` or \`}}\` ${where}: Vue evaluates it and the build fails; put it in backticks`)
+        error(rel, n, 'interpolation', `\`{{\` or \`}}\` ${where}: Vue evaluates it and the build fails; ${fix}`)
       }
     }
     /** Tag-shaped text, as markdown-it reads it: `<Name>`, `<Name attr>`, `</Name>`. */
     const tagsIn = (text) => [...text.matchAll(/<(\/?)([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*?)?(\/?)>/g)]
-    const checkTags = (n, text, balance) => {
+    const checkTags = (n, text, balance, fix = 'wrap it in backticks') => {
       for (const m of tagsIn(text)) {
         // Case matters: `<A>` in `Promise<A>` is not an anchor to Vue.
-        if (!HTML_TAGS.has(m[2])) error(rel, n, 'bare-tag', `${m[0]} is read as an HTML tag; wrap it in backticks`)
+        if (!HTML_TAGS.has(m[2])) error(rel, n, 'bare-tag', `${m[0]} is read as an HTML tag; ${fix}`)
         else if (balance && !VOID_TAGS.has(m[2]) && !m[3]) {
           const entry = balance.get(m[2]) ?? balance.set(m[2], { open: 0, line: n, text: m[0] }).get(m[2])
           entry.open += m[1] ? -1 : 1
@@ -639,9 +690,17 @@ export function checkWiki(options) {
 
     // prose: interpolation and tag-shaped text
     const balance = new Map()
-    for (const { n, text } of page.prose) {
-      checkInterpolation(n, text, 'outside code')
-      checkTags(n, text, balance)
+    for (const { n, text, html } of page.prose) {
+      checkInterpolation(n, text, html ? 'in a raw HTML block' : 'outside code', html ? HTML_HINT : undefined)
+      checkTags(n, text, balance, html ? HTML_HINT : undefined)
+    }
+    // GFM splits a table row on every unescaped pipe, even one inside backticks: the code span
+    // never forms, the cell breaks in two, and whatever the backticks were hiding reaches Vue.
+    for (const { n, text, table } of page.raw) {
+      if (!table) continue
+      for (const m of text.matchAll(INLINE_CODE)) {
+        if (/(?<!\\)\|/.test(m[0])) error(rel, n, 'table', `${m[0]} has a | inside inline code in a table row, which splits the cell; escape it as \\|`)
+      }
     }
     // VitePress leaves `{{ }}` live in a fence whose language ends in "-vue" (```js-vue).
     for (const block of page.blocks) {
@@ -655,7 +714,12 @@ export function checkWiki(options) {
     const types = new Set()
     let diagrams = 0
     for (const block of page.blocks) {
-      if (block.lang !== 'mermaid') continue
+      if (block.lang !== 'mermaid' && block.lang !== 'mmd') continue
+      // The Mermaid plugin renders a fence only when its info string is exactly "mermaid".
+      if (block.info !== 'mermaid') {
+        error(rel, block.start, 'mermaid', `fence opened with "${block.info}" is not rendered as a diagram; open it with exactly \`\`\`mermaid`)
+        continue
+      }
       diagrams++
       let body = block.lines.filter((l) => l.text.trim() && !l.text.trim().startsWith('%%'))
       // A diagram may open with its own "---\ntitle: …\n---" block.
@@ -676,6 +740,17 @@ export function checkWiki(options) {
       for (const { n, text } of block.lines) {
         if (/<br\s*\/>/i.test(text)) error(rel, n, 'mermaid', 'use <br> in labels, not <br/>')
         if (/^\s*%%\{\s*init/.test(text)) warn(rel, n, 'mermaid', 'per-diagram %%{init}%% overrides the site theme; remove it')
+        // "rect rgb(255, 255, 255)" paints a background band in a sequence diagram.
+        const band = text.match(/^\s*rect\s+((?:rgb|hsl)a?\([^)]*\)|#[0-9a-fA-F]{3,8}\b|[a-zA-Z]+)/)
+        if (band) {
+          const value = band[1]
+          const light = value.startsWith('#')
+            ? [3, 6].includes(value.length - 1) && hexLuminance(value.slice(1)) > 0.4
+            : value.includes('(')
+              ? isLightFunction(value)
+              : LIGHT_COLOR_NAMES.has(value.toLowerCase())
+          if (light) error(rel, n, 'mermaid', `rect ${value} is a light-mode color; use the dark palette`)
+        }
         for (const m of text.matchAll(/\b(fill|stroke|color)\s*:\s*(#[0-9a-fA-F]+\b|(?:rgb|hsl)a?\([^)]*\)|[a-zA-Z]+)/g)) {
           const value = m[2]
           if (!value.startsWith('#')) {
@@ -698,25 +773,27 @@ export function checkWiki(options) {
     // citations
     const cited = new Set()
     /**
-     * Record a citation. `strict: false` means we are not sure the text is a citation of this
-     * repository: it counts when the file is there and is otherwise ignored, with no errors.
+     * Record a citation. `level` says how sure we are that the text cites this repository:
+     *   'strict'  it does: a missing file is an error, and lines and letter case are verified
+     *   'verify'  it may: ignored when the file is missing, verified like 'strict' when it exists
+     *   'loose'   a link that could be to another repository: counts when the file exists, no errors
      */
-    const cite = (n, candidates, start, end, shown, strict = true) => {
+    const cite = (n, candidates, start, end, shown, level = 'strict') => {
       const paths = candidates.map(repoPath).filter(Boolean)
       if (!paths.length) return
       if (!opts.source) {
-        if (strict) cited.add(paths[0])
+        if (level === 'strict') cited.add(paths[0])
         return
       }
       const hit = paths.find((c) => linesIn(c) !== null)
       if (!hit) {
         // A link to a folder is a pointer, not a file citation.
-        if (strict && !paths.some(isRepoFolder)) error(rel, n, 'citation', `cited file not found in the repository: ${shown}`)
+        if (level === 'strict' && !paths.some(isRepoFolder)) error(rel, n, 'citation', `cited file not found in the repository: ${shown}`)
         return
       }
       const spelled = trueCase(hit)
       cited.add(spelled)
-      if (!strict) return
+      if (level === 'loose') return
       if (spelled !== hit) error(rel, n, 'citation', `${shown}: the file is ${spelled}; match its upper and lower case`)
       const count = linesIn(hit)
       if (start === 0) error(rel, n, 'citation', `${shown}: line numbers start at 1`)
@@ -724,32 +801,44 @@ export function checkWiki(options) {
       else if (start && end && start > end) error(rel, n, 'citation', `${shown}: line range runs backwards`)
     }
     /** A `path:lines` item from prose or a Sources comment. Text that is not clearly a file is ignored. */
+    /**
+     * How sure we are that a local path names a file: by its name, or because its folder is in
+     * the repository ("src/Dockerfle:3" is a typo to report; "library/postgres:16" is an image tag).
+     */
+    const localLevel = (p) =>
+      looksLikeFile(p) || (opts.source && p.includes('/') && isRepoFolder(path.posix.dirname(p))) ? 'strict' : 'verify'
     const citeLocal = (n, item) => {
       const c = parseCitation(item)
       if (!c) return
       const p = repoPath(c.file)
-      if (p) cite(n, [p], c.start, c.end, item, looksLikeFile(p))
+      if (p) cite(n, [p], c.start, c.end, item, localLevel(p))
     }
 
     // links
     // Link text may contain one level of [brackets]; the URL one level of (parentheses).
-    const LINK = /!?\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*<?((?:[^()\s<>]|\([^()\s]*\))+)>?(?:\s+"[^"]*")?\s*\)/g
-    for (const { n, text } of page.prose) {
-      for (const m of text.matchAll(LINK)) {
-        const url = m[2]
-        if (/^https?:\/\//i.test(url)) {
-          const src = opts.site ? null : parseSourceUrl(url, repoUrl, branch)
-          if (src) cite(n, src.candidates, src.start, src.end, m[1].trim() || url, Boolean(repoUrl))
-          continue
-        }
-        if (/^[a-z][a-z0-9+.-]*:/i.test(url)) continue // mailto:, tel:, ...
-        checkLink(n, url)
+    // The target may be wrapped in <...> (then it may hold spaces) and followed by a "title", 'title' or (title).
+    const LINK = /(!?)\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s<>]|\([^()\s]*\))+))(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)/g
+    // Reference-style: "[text][ref]" resolves through a "[ref]: target" line, which is checked where it is defined.
+    const DEFINITION = /^ {0,3}\[(?!\^)([^\]\n]+)\]:\s*(?:<([^<>\n]*)>|(\S+))/
+    const handleUrl = (n, url, label, isImage) => {
+      if (!url || url.startsWith('//')) return // "//host/path" is an external URL
+      if (/^https?:\/\//i.test(url)) {
+        const src = opts.site ? null : parseSourceUrl(url, repoUrl, branch)
+        if (src) cite(n, src.candidates, src.start, src.end, label.trim() || url, repoUrl ? 'strict' : 'loose')
+        return
       }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return // mailto:, tel:, ...
+      checkLink(n, url, isImage)
+    }
+    for (const { n, text } of page.prose) {
+      for (const m of text.matchAll(LINK)) handleUrl(n, m[3] ?? m[4], m[2], m[1] === '!')
+      const def = text.match(DEFINITION)
+      if (def) handleUrl(n, def[2] ?? def[3], def[1], false)
     }
 
-    function checkLink(n, url) {
+    function checkLink(n, url, isImage) {
       const hashAt = url.indexOf('#')
-      const target = (hashAt < 0 ? url : url.slice(0, hashAt)).split('?')[0]
+      const target = safeDecode((hashAt < 0 ? url : url.slice(0, hashAt)).split('?')[0])
       const anchor = hashAt < 0 ? '' : url.slice(hashAt + 1)
       let dest = rel
       if (target) {
@@ -757,23 +846,31 @@ export function checkWiki(options) {
         dest = dest === '.' ? '' : dest.replace(/^\.\//, '')
         const ext = path.posix.extname(dest).slice(1).toLowerCase()
         const isAsset = ext !== '' && ASSET_EXTENSIONS.has(ext)
-        if (dest === '..' || dest.startsWith('../')) {
-          if (EXEMPT_LINK.test(dest)) return
-          // Whatever the file type: the site either reports a dead link or ships a link that 404s.
-          error(rel, n, 'link', `${url} leaves the wiki; cite the file with a repository URL or plain text instead`)
+        // README, AGENTS and CLAUDE files are kept out of the build, wherever they are.
+        if (NOT_A_PAGE_LINK.test(dest)) {
+          error(rel, n, 'link', `${url} is not part of the site; cite the file instead of linking it`)
           return
         }
-        if (EXEMPT_LINK.test(dest)) {
-          if (!fs.existsSync(path.join(wikiDir, dest.endsWith('.md') ? dest : `${dest}.md`))) warn(rel, n, 'link', `${url} does not exist`)
+        if (dest === '..' || dest.startsWith('../')) {
+          // Whatever the file type: the site either reports a dead link or ships a link that 404s.
+          error(rel, n, 'link', `${url} leaves the wiki; cite the file with a repository URL or plain text instead`)
           return
         }
         if (isAsset) {
           const inWiki = fs.existsSync(path.join(wikiDir, dest))
           const inPublic = fs.existsSync(path.join(wikiDir, 'public', dest))
-          if (target.startsWith('/') ? !inPublic && !inWiki : !inWiki) {
+          if (target.startsWith('/')) {
+            // A site-root path is served from public/ and from nowhere else.
+            if (!inPublic) {
+              error(rel, n, 'link', inWiki ? `${url} is a site-root path, but the file is not in public/; move it to public/${dest} or link it with a relative path` : `broken link ${url} (no public/${dest})`)
+            }
+          } else if (!inWiki) {
             // A file in public/ is served from the site root; a relative path to it resolves nowhere.
             if (inPublic) error(rel, n, 'link', `${url} exists only in public/; link it from the site root as /${dest}`)
             else error(rel, n, 'link', `broken link ${url} (no ${dest})`)
+          } else if (!isImage) {
+            // The build bundles embedded images; a plain link to any other file is not copied to the site.
+            warn(rel, n, 'link', `${url} is a file the site does not publish (only pages and embedded images are); put it in public/ and link it from the site root`)
           }
           return
         }
@@ -816,7 +913,7 @@ export function checkWiki(options) {
       for (const { n, items } of page.sources) {
         for (const item of items) {
           if (parseCitation(item)) citeLocal(n, item)
-          else if (looksLikeFile(item) && !/\s/.test(item) && repoPath(item)) cite(n, [item], null, null, item)
+          else if (!/\s/.test(item) && repoPath(item) && localLevel(repoPath(item)) === 'strict') cite(n, [item], null, null, item)
         }
       }
 
@@ -835,7 +932,6 @@ export function checkWiki(options) {
       }
 
       // tables
-      const isDelimiterRow = (text) => /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(text)
       // Local citations keep the full path, so a long `path:line` is expected in a local wiki.
       const exemptToken = (token) => site.host === 'local' && parseCitation(token.replace(/^[(`]+|[)`.,;]+$/g, '')) !== null
       for (let i = 0; i < page.raw.length - 1; i++) {
@@ -1041,7 +1137,12 @@ export function checkWiki(options) {
     const all = new Set(checked.flatMap(([, p]) => [...p.cited]))
     const report = [...groups.values()].map((g) => ({ section: g.section, pages: g.pages, diagrams: g.diagrams, citedFiles: g.files.size }))
     report.push({ section: 'Total', pages: checked.length, diagrams: stats.diagrams, citedFiles: all.size })
-    return { ok: errors.length === 0, mode: opts.mode, errors, warnings, stats, pages, report }
+    // No --repo, no recorded root, no git: the parent folder was used, which may not be the repository.
+    const notes = []
+    if (repoRootGuessed && opts.source && !opts.site && !opts.catalogueOnly) {
+      notes.push(`no repository root is known (no --repo, no recorded root, not in git): citations were checked against ${posix(repoRoot)}`)
+    }
+    return { ok: errors.length === 0, mode: opts.mode, errors, warnings, stats, pages, report, repoRoot: posix(repoRoot), notes }
   }
 }
 
@@ -1075,6 +1176,7 @@ function main() {
       `\n${result.mode} | catalogue: ${s.sections} section(s), ${s.leaves} page(s) | checked ${s.pages} page(s), ${s.diagrams} diagram(s) | ` +
         `${result.errors.length} error(s), ${result.warnings.length} warning(s)`,
     )
+    for (const note of result.notes) console.log(`note: ${note}`)
     return result.ok ? 0 : 1
   } catch (e) {
     // Bad options and unreadable inputs are not findings: exit 2 so callers can tell them apart.

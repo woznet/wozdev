@@ -12,16 +12,18 @@ Load `deep-wiki:wiki-conventions`, `deep-wiki:wiki-page-writer`, and `deep-wiki:
 ## Phase 1: Context and Scan
 
 1. Check Node (conventions section 10). Below 22.12, stop and tell the user.
-2. If `wiki/` already has pages or a `catalogue.json`, ask: replace the wiki with a crisp one, or stop. Never mix crisp pages into an existing wiki. If the user chooses replace:
-   - The write mode is `regenerate`; otherwise it is `fill-missing`.
-   - List the existing `wiki/NN-*/` pages and `wiki/catalogue.json` by exact path and ask to delete them. If the user declines, stop.
-   - Delete the confirmed paths after Phase 2, skipping any path this run wrote.
-3. Resolve `REPO_URL`, `HOST`, and `BRANCH`, then run the bootstrap command from conventions section 10 with `--depth crisp`, `--host`, `--repo-url`, and `--branch`.
+2. If the wiki has pages (conventions' definition) or a `wiki/catalogue.json`, crisp never extends it:
+   - **With a focus argument:** stop. Suggest `/deep-wiki:generate <focus>` or `/deep-wiki:page <topic>`, which add to an existing wiki without deleting anything.
+   - **Without one:** ask: replace the wiki with a crisp one, or stop. If the user chooses replace:
+     - The write mode is `regenerate`; on a fresh repository it is `fill-missing`.
+     - List by exact path: every page under `wiki/NN-*/`, `wiki/catalogue.json`, `wiki/index.md`, and the onboarding guides other than `contributor-guide.md` (this run rewrites that one). `wiki/research/` and `wiki/changelog.md` are kept. Ask to delete the listed paths. If the user declines, stop.
+     - Delete `wiki/catalogue.json` now, so the page checks in Phase 2 treat unwritten siblings as pending. Delete the rest after Phase 2, skipping any path this run wrote.
+3. Resolve `REPO_URL`, `HOST`, and `BRANCH`, then run the bootstrap command from conventions section 10, which says which flags to pass. First run: all four, with `--depth crisp`. Replacing a wiki: `--scripts-only --depth crisp`.
 4. Scan once. List the tree to depth 3 (skip `node_modules/`, `.git/`, `dist/`, `wiki/`), then read the README, the manifests, and at most 10–15 key source files (entry points, main config, 2–3 core modules). Batch the reads and don't re-read files.
 
 ## Phase 2: Pages and Onboarding (parallel)
 
-Write the pages that apply; skip the rest. Five pages is fine for a small project.
+Write the pages that apply; skip the rest. Five pages is fine for a small project. With a focus (fresh repository only), write Architecture for the focus and only the other rows the focus has something for.
 
 | Page | File | Content |
 |------|------|---------|
@@ -41,10 +43,10 @@ Write the pages yourself from the Phase 1 reads, or dispatch `deep-wiki:wiki-wri
 
 Follow `deep-wiki:wiki-vitepress` Steps 1–3 and skip the build:
 
-1. Run `init-wiki.mjs` with the title and description (add `--write-mode regenerate` if the user chose replace).
+1. Run `init-wiki.mjs`. Pass `--title` and `--description` only when `wiki/.vitepress/config.mts` does not exist or the user chose replace (then also `--write-mode regenerate`).
 2. Write `wiki/index.md`. A crisp wiki has no section indexes, so the landing page links each section's page directly.
 3. Run `node wiki/scripts/gen-section-indexes.mjs wiki`; with no catalogue it writes only the onboarding hub.
-4. Run `node wiki/scripts/check-wiki.mjs wiki --pending` and fix every error. The llms files do not exist yet.
+4. Run `node wiki/scripts/check-wiki.mjs wiki --pending` and fix every error in the pages this run wrote. Report errors in pages it kept (`research/`, `changelog.md`); do not edit them. The llms files do not exist yet.
 
 ## Phase 4: Agent Files and llms.txt
 
@@ -62,6 +64,6 @@ Follow `deep-wiki:wiki-vitepress` Steps 1–3 and skip the build:
 
 ## Arguments
 
-An optional focus area (a subsystem or folder) that narrows the scan and the pages.
+An optional focus area (a subsystem or folder). On a fresh repository it narrows the scan and the page list to what the focus has. On a wiki that already has pages, crisp stops (Phase 1).
 
 $ARGUMENTS

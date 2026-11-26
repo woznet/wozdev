@@ -14,14 +14,16 @@
 //                             Default: the previous value, else '/'.
 //   --package-name <name>     name for wiki/package.json (default: the repository folder name)
 //   --write-mode <mode>       fill-missing (default) | regenerate
-//   --repo <path>             repository root (default: the git top level, else the wiki's parent folder)
+//   --repo <path>             repository root (default: the root an earlier run recorded, else the git top level)
 //   --scripts-only            copy scripts/ and write the state file; write no other scaffold file
 //   --json                    machine-readable output
 //
 // What it writes:
 //   scripts/**                always replaced with the plugin's copies
 //   other scaffold files      written when missing; replaced only with --write-mode regenerate
-//   .deep-wiki.json           { depth, host, repoUrl, branch, base, wikiDir, version }, merged with the old file
+//   .deep-wiki.json           { depth, host, repoUrl, branch, base, wikiDir, version }, merged with the old file.
+//                             wikiDir (the wiki's path below the repository root) is recorded only when
+//                             --repo or git gives a real root; host follows a new --repo-url unless --host is given
 // Values not given as flags come from the previous config.mts, then the state file, so a regenerate
 // keeps a `base` that /deep-wiki:deploy set. `--depth` and `--host` change only when passed.
 // A config.mts that is kept (fill-missing, or --scripts-only) has --base, --repo-url, and --branch
@@ -35,20 +37,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  baseFromArg,
-  configConstPattern,
-  gitTopLevel,
-  inferHost,
-  loadCatalogue,
-  loadState,
-  posix,
-  readConfigConst,
-  readConfigLiteral,
-  realPath,
-  repoUrlFromArg,
-  resolveSite,
-} from './lib.mjs'
+import { baseFromArg, configConstPattern, inferHost, loadCatalogue, loadState, posix, readConfigConst, readConfigLiteral, realPath, repoUrlFromArg, resolveRepoRoot, resolveSite } from './lib.mjs'
 
 const HOSTS = ['github', 'gitlab', 'azure-devops', 'local']
 const DEPTHS = ['full', 'crisp']
@@ -159,7 +148,9 @@ export function initWiki(options) {
   }
   const first = (...values) => values.find((v) => typeof v === 'string' && v !== '')
 
-  const top = options.repo ? realPath(options.repo) : gitTopLevel(wikiExists ? wikiDir : path.dirname(wikiDir))
+  // --repo, else the root an earlier run recorded, else the git top level; null when there is none.
+  const found = resolveRepoRoot(wikiDir, { repo: options.repo, state: prevState }).root
+  const top = found ? realPath(found) : null
   const below = top ? path.relative(top, wikiExists ? realPath(wikiDir) : path.join(realPath(path.dirname(wikiDir)), path.basename(wikiDir))) : null
   const insideTop = below !== null && !below.startsWith('..') && !path.isAbsolute(below)
   const repoUrl = repoUrlArg ?? prevSite.repoUrl
@@ -168,11 +159,15 @@ export function initWiki(options) {
     description: first(options.description, prev('SITE_DESCRIPTION'), catalogue?.summary),
     repoUrl,
     branch: first(options.branch, prevSite.branch) ?? '',
-    host: first(options.host, prevState.host) ?? inferHost(repoUrl),
+    // A new --repo-url without --host changes what the host is: "none" is local, a GitHub URL is github.
+    host: first(options.host, repoUrlArg === undefined ? prevState.host : undefined) ?? inferHost(repoUrl),
     depth: first(options.depth, prevState.depth) ?? 'full',
     base: baseArg ?? prevSite.base,
-    wikiDir: insideTop ? posix(below) || '.' : (first(prev('WIKI_DIR'), prevState.wikiDir) ?? path.basename(wikiDir)),
+    // The wiki's path below the repository root. Without a root there is nothing true to record.
+    wikiDir: insideTop ? posix(below) || '.' : undefined,
   }
+  // WIKI_DIR in config.mts only feeds "Edit this page" links; it keeps its value or falls back to the folder name.
+  const configWikiDir = values.wikiDir ?? first(prev('WIKI_DIR')) ?? path.basename(wikiDir)
   const packageName = kebab(options.packageName ?? path.basename(top ?? path.dirname(wikiDir)))
 
   const configPath = path.join(wikiDir, '.vitepress', 'config.mts')
@@ -198,7 +193,7 @@ export function initWiki(options) {
   const fillConfig = (text) => {
     let out = text
     for (const [key, name] of [...Object.entries(CONFIG_CONSTS), ['wikiDir', 'WIKI_DIR']]) {
-      const next = setConst(out, name, values[key] ?? '')
+      const next = setConst(out, name, key === 'wikiDir' ? configWikiDir : (values[key] ?? ''))
       if (next === null) throw new UsageError(`the config.mts template has no "const ${name} = '...'" line to fill`)
       out = next
     }
@@ -275,9 +270,12 @@ export function initWiki(options) {
     repoUrl: literal('REPO_URL') !== undefined ? now.repoUrl : values.repoUrl,
     branch: literal('BRANCH') ?? values.branch,
     base: literal('BASE') !== undefined ? now.base : values.base,
-    wikiDir: values.wikiDir,
     version: PLUGIN_VERSION,
   }
+  // Recorded only when a real root (--repo or git) says where the wiki sits; otherwise left out,
+  // so no later script mistakes a guess for the repository root.
+  if (values.wikiDir !== undefined) state.wikiDir = values.wikiDir
+  else delete state.wikiDir
   put('.deep-wiki.json', `${JSON.stringify(state, null, 2)}\n`)
 
   return { ok: true, wikiDir: posix(wikiDir), files, state, notes }

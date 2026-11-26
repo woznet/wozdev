@@ -74,5 +74,6 @@ Omit empty categories. Always list breaking changes first.
    ```
 
    followed by the period groups. A rerun replaces the whole file with the range it was given; to keep older entries, widen the range.
-3. When `wiki/scripts/check-wiki.mjs` exists, run `node wiki/scripts/check-wiki.mjs wiki --page changelog.md` and fix every error.
-4. Tell the caller the page appears in the site's top navigation and under "More" in the sidebar after the next build, and that `/deep-wiki:llms` will now include it.
+3. Load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10, then run `node wiki/scripts/check-wiki.mjs wiki --page changelog.md` and fix every error.
+4. If `wiki/llms.txt` exists, run `node wiki/scripts/gen-llms.mjs wiki` so the changelog is included.
+5. Tell the caller the page appears in the site's top navigation and under "More" in the sidebar after the next build.

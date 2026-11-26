@@ -105,7 +105,9 @@ export function genIndexes(options) {
       skipped.push(target)
       return
     }
-    const lines = ['---', `title: ${yamlString(title)}`, `description: ${yamlString(description)}`, '---', '', `# ${prose(title)}`, MARKER, '', prose(description), '']
+    // A line break in a catalogue value would end the quoted YAML scalar early.
+    const flat = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
+    const lines = ['---', `title: ${yamlString(flat(title))}`, `description: ${yamlString(flat(description))}`, '---', '', `# ${prose(title)}`, MARKER, '', prose(description), '']
     if (rows.length) lines.push(`| ${header.join(' | ')} |`, `|${header.map(() => '------').join('|')}|`, ...rows, '')
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.writeFileSync(file, lines.join('\n'))

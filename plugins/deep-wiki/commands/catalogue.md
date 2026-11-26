@@ -9,7 +9,7 @@ Load `deep-wiki:wiki-conventions`, then `deep-wiki:wiki-architect`, and follow t
 
 Running this command is a request to write the catalogue. If one exists, tell the user it will be replaced (or, with a focus, updated for that focus only) before you write it.
 
-If `wiki/scripts/check-wiki.mjs` is missing, load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10 with depth `full` first, so the catalogue can be validated.
+First load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10 (it gives the flags for a first run and for a later one), so the catalogue can be validated with current scripts.
 
 Finish by showing the `Section | Pages | Key files` table and suggesting `/deep-wiki:generate` (choose "fill missing" there to keep this catalogue).
 

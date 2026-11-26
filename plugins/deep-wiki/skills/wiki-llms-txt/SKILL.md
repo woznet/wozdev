@@ -17,7 +17,7 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. Run every command
 
 | File | Content |
 |------|---------|
-| `./llms.txt` | Root discovery file; links into `wiki/`. The only llms file at the repository root. |
+| `./llms.txt` | Root discovery file; links into `wiki/`. The only llms file at the repository root. Not written outside git unless `--repo <path>` names the root. |
 | `wiki/llms.txt` | Same list with wiki-relative `.md` links |
 | `wiki/llms-full.txt` | Every wiki page inlined in a `<doc>` block |
 | `wiki/public/llms.txt`, `wiki/public/llms-full.txt` | Deployment copies with links rewritten to site routes, served at `{base}llms.txt`. Written only when the wiki has a site, which means `wiki/.vitepress/config.mts` exists. |
@@ -26,7 +26,7 @@ Never write or edit these files by hand. Change the input or the pages and rerun
 
 ## Procedure
 
-1. **Check the wiki exists.** The script needs `wiki/scripts/gen-llms.mjs` and at least one page. If `wiki/` has no pages, stop and suggest `/deep-wiki:crisp` or `/deep-wiki:generate`. If the pages exist but `wiki/scripts/` does not, load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10.
+1. **Check the wiki exists.** The script needs `wiki/scripts/gen-llms.mjs` and at least one page. If `wiki/` holds no `.md` page at all, stop and suggest `/deep-wiki:crisp` or `/deep-wiki:generate`. Otherwise load `deep-wiki:wiki-vitepress` and run the bootstrap command from conventions section 10, so the scripts are current.
 2. **Read for judgment.** Read `wiki/catalogue.json` (if present), `wiki/index.md`, and the frontmatter `description` of each page. Do not read whole pages.
 3. **Prepare `wiki/.deep-wiki-llms.json`**, the input the script reads on every run. If the file exists, read it and change only what is stale (a page that was renamed or removed, a summary that is no longer true); never rewrite it wholesale, since the user may have edited it. If it does not exist, write it. Keep and commit it. Every key is optional:
 

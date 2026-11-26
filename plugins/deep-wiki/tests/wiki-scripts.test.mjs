@@ -242,11 +242,21 @@ test('without a catalogue a --page link to a missing sibling is only a warning',
   assert.deepEqual(rules(result, 'warnings'), ['link'])
 })
 
-test('links to the wiki root and to excluded files are valid', (t) => {
-  const text = '[Home](../) and [Home](../index.md) and [Agents](../AGENTS.md) and [Section](./) and [Section](../01-getting-started/) and [Setup](./setup).'
-  const result = run(fixture(t, { ...usage(text), 'AGENTS.md': '# Agents\n' }))
+test('links to the wiki root and to folders with a trailing slash are valid', (t) => {
+  const text = '[Home](../) and [Home](../index.md) and [Section](./) and [Section](../01-getting-started/) and [Setup](./setup).'
+  const result = run(fixture(t, usage(text)))
   assert.deepEqual(result.errors, [])
   assert.deepEqual(result.warnings, [])
+})
+
+test('README, AGENTS and CLAUDE files are never link targets, inside or outside the wiki', (t) => {
+  // The site build leaves these files out, so the link would be dead on the site wherever the file is.
+  const text = '[a](../AGENTS.md) [r](../../README.md) [c](../../CLAUDE.md) [n](./README.md) [x](../README)'
+  const f = fixture(t, { ...usage(text), 'AGENTS.md': '# Agents\n', '01-getting-started/README.md': '# Readme\n' }, { repoFiles: { 'README.md': 'x' } })
+  for (const result of [run(f), run(f, { site: true })]) {
+    assert.deepEqual(rules(result), ['link', 'link', 'link', 'link', 'link'])
+    assert.ok(result.errors.every((e) => /is not part of the site; cite the file/.test(e.message)), messages(result))
+  }
 })
 
 test('a folder link without a trailing slash is an error: VitePress reports it dead', (t) => {
@@ -256,8 +266,7 @@ test('a folder link without a trailing slash is an error: VitePress reports it d
 })
 
 test('a relative link that leaves the wiki is an error whatever its extension, also with --site', (t) => {
-  // README.md is exempt (the site config ignores it); the other three are not, asset or page.
-  const text = '[c](../../CONTRIBUTING.md) [r](../../README.md) [p](../../logo.png) [s](../../src/a.ts)'
+  const text = '[c](../../CONTRIBUTING.md) [p](../../logo.png) [s](../../src/a.ts)'
   const f = fixture(t, usage(text), { repoFiles: { 'CONTRIBUTING.md': 'x', 'logo.png': 'x' } })
   assert.deepEqual(rules(run(f)), ['link', 'link', 'link'])
   assert.deepEqual(rules(run(f, { site: true })), ['link', 'link', 'link'])
@@ -406,15 +415,20 @@ test('links with parentheses or brackets in the path are read whole', (t) => {
   assert.match(messages(run(f)), /cites line 9 but app\/\(marketing\)\/page\.tsx has 1 lines/)
 })
 
-test('when the source repository is absent the checker says so once', (t) => {
+test('when the checker is pointed at the wrong repository it says so once', (t) => {
   const cites = Array.from({ length: 12 }, (_, i) => `(lib/x${i}.ts:1)`).join(' ')
   const page = goodPage('Usage').replace(/Facts: .*\n/, `${cites}\n`).replace(/<!-- Sources: [^>]* -->/g, '<!-- Sources: lib/x0.ts:1 -->')
   const catalogue = catalogueOf(leaf('setup', { prompt: 'Read lib/x0.ts.' }), leaf('usage', { prompt: 'Read lib/x1.ts.' }))
   const f = fixture(t, { '01-getting-started/usage.md': page, '01-getting-started/setup.md': page }, { catalogue })
-  for (const s of SOURCES) fs.rmSync(path.join(f.repo, s))
-  const result = run(f)
+  // The wrong root is a real project: it has plenty of files, just none of the cited ones. The
+  // file minimum therefore stays at 5 and the "cites 0 files" findings exist until they are folded in.
+  const wrongRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-other-'))
+  t.after(() => fs.rmSync(wrongRoot, { recursive: true, force: true }))
+  for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(wrongRoot, `other${i}.py`), 'x\n')
+  assert.equal(lib.countSourceFiles(wrongRoot, f.wiki, 5), 5)
+  const result = checkWiki({ wikiDir: f.wiki, repo: wrongRoot })
   assert.deepEqual(rules(result), ['citation'])
-  assert.match(result.errors[0].message, /pass --repo/)
+  assert.match(result.errors[0].message, /none of the \d+ cited files exist.*pass --repo/)
   assert.doesNotMatch(result.errors[0].message, /no-source/)
 })
 
@@ -644,7 +658,7 @@ test('exit codes: 0 clean, 1 findings, 2 usage or missing input', (t) => {
 test('--json prints one object, also for usage errors; --report prints the table', (t) => {
   const f = fixture(t)
   const ok = JSON.parse(cli(f.wiki, '--repo', f.repo, '--json').stdout)
-  assert.deepEqual(Object.keys(ok), ['ok', 'mode', 'errors', 'warnings', 'stats', 'pages', 'report'])
+  assert.deepEqual(Object.keys(ok), ['ok', 'mode', 'errors', 'warnings', 'stats', 'pages', 'report', 'repoRoot', 'notes'])
   assert.equal(ok.ok, true)
   const usageError = cli(path.join(f.repo, 'no-such-wiki'), '--json')
   assert.equal(usageError.status, 2)
@@ -840,4 +854,170 @@ test('the leftover check works when --repo is a folder inside the git repository
   fs.writeFileSync(path.join(project, 'testResults.xml'), '<x/>')
   const left = checkWiki({ wikiDir: wiki, repo: project, baseline }).warnings.filter((w) => w.rule === 'leftover')
   assert.deepEqual(left.map((w) => w.file), ['proj/testResults.xml'])
+})
+
+// ---------------------------------------------------------------------------
+// Round three: what Markdown really renders
+// ---------------------------------------------------------------------------
+test('a pipe inside inline code in a table row is an error: GFM splits the cell there', (t) => {
+  const table = (cell) => ['| Name | Type |', '|------|------|', '| x | ' + cell + ' |'].join('\n')
+  const generic = run(fixture(t, usage(table('`Array<Item> | null`'))))
+  assert.deepEqual(rules(generic).sort(), ['bare-tag', 'table'])
+  assert.match(messages(generic), /has a \| inside inline code in a table row.*escape it as \\\|/)
+  const helm = run(fixture(t, usage(table('`{{ .Values.x | quote }}`'))), { site: true })
+  assert.deepEqual(rules(helm).sort(), ['interpolation', 'table'])
+  // Escaped, the code span holds together and protects its content.
+  assert.deepEqual(run(fixture(t, usage(table('`Array<Item> \\| null`')))).errors, [])
+  // A pipe in code outside a table is ordinary code.
+  assert.deepEqual(run(fixture(t, usage('Returns `Array<Item> | null`.'))).errors, [])
+})
+
+test('inside a raw HTML block backticks protect nothing', (t) => {
+  const tight = ['<details>', '<summary>More</summary>', 'The token is `${{ secrets.T }}` and `List<T>`.', '</details>'].join('\n')
+  const result = run(fixture(t, usage(tight)))
+  assert.deepEqual(rules(result).sort(), ['bare-tag', 'interpolation'])
+  assert.ok(result.errors.every((e) => /raw HTML block.*leave a blank line after the opening tag/.test(e.message)), messages(result))
+  // With the blank line Markdown is back on and the code spans are real.
+  const loose = ['<details>', '<summary>More</summary>', '', 'The token is `${{ secrets.T }}` and `List<T>`.', '', '</details>'].join('\n')
+  assert.deepEqual(run(fixture(t, usage(loose))).errors, [])
+})
+
+test('reference-style, titled and angle-bracket links are checked like any other', (t) => {
+  const broken = ["See [Setup][s] and [x](./nope.md 'title') and [y](<./no pe.md>) and [z](./gone.md (title)).", '', '[s]: ./missing.md'].join('\n')
+  const result = run(fixture(t, usage(broken)))
+  assert.deepEqual(rules(result), ['link', 'link', 'link', 'link'])
+  for (const name of ['nope.md', 'no pe.md', 'gone.md', 'missing.md']) assert.match(messages(result), new RegExp('no 01-getting-started/' + name.replace('.', '\\.')))
+  const fine = ["See [Setup][s] and [x](./setup.md 'title') and [y](<./setup.md>) and [cdn](//example.com/x.js).", '', '[s]: ./setup.md "Setup"', '[^1]: a footnote, not a link'].join('\n')
+  const ok = run(fixture(t, usage(fine)))
+  assert.deepEqual(ok.errors, [])
+  assert.deepEqual(ok.warnings, [])
+})
+
+test('a reference-style citation counts and is verified', (t) => {
+  const text = 'See [a.ts:2-9][src].\n\n[src]: ' + REPO_URL + '/blob/main/src/a.ts#L2-L9'
+  const result = run(fixture(t, { ...usage(text), ...withState({ repoUrl: REPO_URL, branch: 'main' }) }))
+  assert.match(messages(result), /cites line 9 but src\/a\.ts has 5 lines/)
+})
+
+test('site-root assets must be in public/, and a linked data file is not published', (t) => {
+  const files = { '01-getting-started/shot.png': 'x', '01-getting-started/data.json': '{}', 'public/logo.svg': '<svg/>' }
+  const root = run(fixture(t, { ...usage('![s](/01-getting-started/shot.png) ![gone](/nope.png) ![ok](/logo.svg)'), ...files }))
+  assert.deepEqual(rules(root), ['link', 'link'])
+  assert.match(messages(root), /site-root path, but the file is not in public\//)
+  assert.match(messages(root), /no public\/nope\.png/)
+  const data = run(fixture(t, { ...usage('[data](./data.json) and ![shot](./shot.png)'), ...files }))
+  assert.deepEqual(data.errors, [])
+  assert.deepEqual(rules(data, 'warnings'), ['link'])
+  assert.match(messages(data, 'warnings'), /data\.json is a file the site does not publish/)
+})
+
+test('extensionless files are cited and verified like any other file', (t) => {
+  const repoFiles = { Dockerfile: 'FROM node\n', 'build/Makefile': 'all:\n' }
+  const bad = run(fixture(t, usage('See (Dockerfile:9999) and (src/Dockerfle:3) and (build/Makefile:7).'), { repoFiles }))
+  assert.deepEqual(rules(bad), ['citation', 'citation', 'citation'])
+  assert.match(messages(bad), /cites line 9999 but Dockerfile has 1 lines/)
+  assert.match(messages(bad), /cited file not found in the repository: src\/Dockerfle:3/)
+  assert.match(messages(bad), /cites line 7 but build\/Makefile has 1 lines/)
+  // An image tag, a host and a port are not files: nothing to report, nothing counted.
+  const ok = run(fixture(t, usage('Runs (library/postgres:16) on (db.internal:5432) at (port:8080); see (Dockerfile:1).'), { repoFiles }))
+  assert.deepEqual(ok.errors, [])
+  assert.equal(ok.pages.find((p) => p.file.endsWith('usage.md')).citedFiles, 6)
+  // Without the source, only names that are clearly files count.
+  const blind = run(fixture(t, usage('(library/postgres:16) (port:8080) (Dockerfile:1)'), { repoFiles }), { source: false })
+  assert.equal(blind.pages.find((p) => p.file.endsWith('usage.md')).citedFiles, 6)
+})
+
+test('line 0 is an error in every citation form', (t) => {
+  const ado = 'https://dev.azure.com/o/p/_git/r'
+  const adoLink = '[a.ts](' + ado + '?path=/src/a.ts&version=GBmain&line=0&lineEnd=0)'
+  assert.match(messages(run(fixture(t, { ...usage(adoLink), ...withState({ repoUrl: ado, branch: 'main' }) }))), /line numbers start at 1/)
+  const gh = '[a.ts:0](' + REPO_URL + '/blob/main/src/a.ts#L0)'
+  assert.match(messages(run(fixture(t, { ...usage(gh), ...withState({ repoUrl: REPO_URL, branch: 'main' }) }))), /line numbers start at 1/)
+  assert.match(messages(run(fixture(t, usage('(src/a.ts:0)')))), /line numbers start at 1/)
+})
+
+test('only a fence opened with exactly mermaid is a diagram', (t) => {
+  const block = (info) => [FENCE + info, 'flowchart TD', '  A --> B', FENCE, '<!-- Sources: src/a.ts:1 -->', ''].join('\n')
+  for (const info of ['Mermaid', 'mermaid title', 'mmd', 'mermaid{1}']) {
+    // Swap one of the page's three diagrams for the mis-opened fence: it no longer counts.
+    const page = goodPage('Usage').replace(FENCE + 'mermaid\nflowchart LR', FENCE + info + '\nflowchart LR')
+    const result = run(fixture(t, { '01-getting-started/usage.md': page }))
+    assert.deepEqual(rules(result), ['mermaid', 'threshold'], info)
+    assert.match(result.errors[0].message, /is not rendered as a diagram; open it with exactly/)
+    assert.match(result.errors[1].message, /2 Mermaid diagram\(s\)/)
+  }
+  assert.deepEqual(run(fixture(t, usage(block('mermaid')))).errors, [])
+})
+
+test('a light rect band in a sequence diagram is a light fill', (t) => {
+  const seq = (band) => diagram('sequenceDiagram', '  autonumber', '  ' + band, '  A->>B: call', '  end')
+  for (const band of ['rect rgb(255, 255, 255)', 'rect rgba(240,240,240,0.9)', 'rect #eeeeee', 'rect white']) {
+    assert.match(messages(run(fixture(t, usage(seq(band))))), /is a light-mode color/, band)
+  }
+  for (const band of ['rect rgb(22, 27, 34)', 'rect rgba(255,255,255,0.05)', 'rect #161b22']) {
+    assert.deepEqual(run(fixture(t, usage(seq(band)))).errors, [], band)
+  }
+})
+
+test('catalogue page paths and text fields are validated like section folders', (t) => {
+  const bad = (extra, section = {}) => {
+    const catalogue = catalogueOf(leaf('setup'), leaf('usage', extra))
+    Object.assign(catalogue.items[0], section)
+    return messages(run(fixture(t, {}, { catalogue }), { catalogueOnly: true }))
+  }
+  assert.match(bad({ path: '01-getting-started/../../outside/p.md' }), /must stay inside the wiki/)
+  assert.match(bad({ path: '01-getting-started/dist/q.md' }), /folder "dist" is reserved/)
+  assert.match(bad({ path: '01-getting-started/Q Page.md' }), /file name "Q Page\.md" must be lowercase kebab-case/)
+  assert.match(bad({ prompt: 'Read src/a.ts.\nThen src/b.ts.' }), /prompt must be a single line/)
+  assert.match(bad({ name: 'Usage\nGuide' }), /name must be a single line/)
+  assert.match(bad({}, { description: 'Line one.\nLine two.' }), /description must be a single line/)
+  assert.equal(lib.pagePathProblem('01-getting-started/setup.md'), null)
+  assert.equal(lib.pagePathProblem('01-a/sub-section/page-2.md'), null)
+})
+
+test('a line break in a catalogue description never reaches generated frontmatter', (t) => {
+  const catalogue = catalogueOf(leaf('setup'), leaf('usage'))
+  catalogue.items[0].description = 'Line one.\nLine   two.'
+  const f = fixture(t, { '01-getting-started/index.md': null }, { catalogue })
+  execFileSync(process.execPath, [genIndexes, f.wiki])
+  const index = fs.readFileSync(path.join(f.wiki, '01-getting-started/index.md'), 'utf8')
+  assert.match(index, /^description: "Line one\. Line two\."\r?$/m)
+  // The catalogue itself is reported; the generated page is sound.
+  const result = run(f, { pages: ['01-getting-started/index.md'] })
+  assert.deepEqual(result.errors.map((e) => e.file), ['catalogue.json'])
+})
+
+test('frontmatter that YAML reads differently from this reader is an error', (t) => {
+  const page = (head) => ({ '01-getting-started/usage.md': goodPage('Usage').replace(/^---\n[\s\S]*?\n---\n/, '---\n' + head + '\n---\n') })
+  const problem = (head) => messages(run(fixture(t, page(head))))
+  assert.match(problem('title: Usage\ndescription: This is long\n  continued here'), /description continues on the next line/)
+  assert.match(problem('title: Usage\ntitle: Usage again\ndescription: Fine.'), /title appears twice/)
+  assert.match(problem('title: yes\ndescription: Fine.'), /title is read by YAML as a boolean, number, date or null.*"yes"/)
+  assert.match(problem('title: 2024-01-01\ndescription: Fine.'), /title is read by YAML as a boolean, number, date or null/)
+  assert.match(problem('title: 42\ndescription: Fine.'), /title is read by YAML as/)
+  assert.match(problem('title: Usage\ndescription: null'), /description is read by YAML as/)
+  // Quoted, the same values are plain text; a quoted value may be followed by other keys.
+  assert.deepEqual(run(fixture(t, page('title: "42"\ndescription: "yes"\noutline: deep'))).errors, [])
+  assert.deepEqual(run(fixture(t, page('title: Version 2 notes\ndescription: Notes for 2024-01-01 and on.'))).errors, [])
+})
+
+test('one resolver finds the repository root: flag, recorded path, git, or none', (t) => {
+  const f = fixture(t)
+  assert.deepEqual(lib.resolveRepoRoot(f.wiki, { repo: f.repo }), { root: path.resolve(f.repo), source: 'flag' })
+  const recorded = lib.resolveRepoRoot(f.wiki, { state: { wikiDir: 'wiki' } })
+  assert.equal(recorded.source, 'state')
+  assert.equal(lib.realPath(recorded.root), lib.realPath(f.repo))
+  // A recorded path that does not match where the wiki really is cannot be trusted.
+  assert.notEqual(lib.resolveRepoRoot(f.wiki, { state: { wikiDir: 'docs/wiki' } }).source, 'state')
+  assert.notEqual(lib.resolveRepoRoot(f.wiki, { state: { wikiDir: '../wiki' } }).source, 'state')
+  if (lib.gitTopLevel(f.repo)) return // the temp folder is inside a git repository: "none" cannot be shown here
+  assert.deepEqual(lib.resolveRepoRoot(f.wiki, { state: {} }), { root: null, source: null })
+  // With no root the checker falls back to the parent folder and says so.
+  const guessed = checkWiki({ wikiDir: f.wiki })
+  assert.deepEqual(guessed.errors, [])
+  assert.match(guessed.notes.join('\n'), /no repository root is known.*citations were checked against/)
+  assert.deepEqual(run(f).notes, [])
+  // The recorded root is used when --repo is not given.
+  fs.writeFileSync(path.join(f.wiki, '.deep-wiki.json'), JSON.stringify({ wikiDir: 'wiki' }))
+  assert.deepEqual(checkWiki({ wikiDir: f.wiki }).notes, [])
 })

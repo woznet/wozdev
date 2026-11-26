@@ -415,22 +415,47 @@ test('sections that share a name with each other or a built-in heading stay apar
   assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })).filter((f) => f.level === 'error'), [])
 })
 
-test('the root llms.txt goes where the state file says, and nowhere when nothing says', (t) => {
+test('with no repository root, the bootstrap records none and no root llms.txt is written', (t) => {
   const { gitTopLevel } = lib
   const files = Object.fromEntries(Object.entries(wikiFiles()).map(([rel, text]) => [rel.replace(/^wiki\//, 'docs/wiki/'), text]))
   const dir = repo(t, files)
   if (gitTopLevel(dir)) return t.skip('the temp folder is inside a git repository')
   const wiki = path.join(dir, 'docs/wiki')
+
+  // The documented workflow: bootstrap first. No --repo and no git means no root to record.
+  const boot = initWiki({ wikiDir: wiki, ...FLAGS, scriptsOnly: true })
+  assert.ok(!('wikiDir' in boot.state), 'a guess is never recorded as the wiki path')
+  assert.ok(!('wikiDir' in JSON.parse(read(wiki, '.deep-wiki.json'))))
   const unknown = genLlms({ wikiDir: wiki })
   assert.ok(unknown.notes.some((n) => /no repository root is known/.test(n)))
   assert.ok(!exists(dir, 'docs/llms.txt') && !exists(dir, 'llms.txt'), 'the parent folder is never guessed')
   assert.deepEqual(unknown.files.map((f) => f.path), ['wiki/llms.txt', 'wiki/llms-full.txt'])
 
-  fs.writeFileSync(path.join(wiki, '.deep-wiki.json'), JSON.stringify({ wikiDir: 'docs/wiki' }))
+  // Told the root once, every later run finds it again without the flag.
+  const told = initWiki({ wikiDir: wiki, repo: dir, scriptsOnly: true })
+  assert.equal(told.state.wikiDir, 'docs/wiki')
+  const again = initWiki({ wikiDir: wiki, scriptsOnly: true })
+  assert.equal(again.state.wikiDir, 'docs/wiki', 'a recorded path is kept, not recomputed')
   const recorded = genLlms({ wikiDir: wiki })
   assert.equal(recorded.files[0].path, 'llms.txt')
   assert.match(read(dir, 'llms.txt'), /\(\.\/docs\/wiki\/01-core\/alpha\.md\)/)
   assert.ok(!exists(dir, 'docs/llms.txt'))
+  // The checker uses the same root: the root llms.txt it checks is the one gen-llms wrote.
+  assert.deepEqual(checkWiki({ wikiDir: wiki, source: false }).notes, [])
+})
+
+test('a new --repo-url without --host changes the recorded host', (t) => {
+  const dir = repo(t, wikiFiles())
+  const local = init(dir, { repoUrl: 'none', host: undefined, branch: undefined })
+  assert.equal(local.state.host, 'local')
+  assert.equal(local.state.repoUrl, '')
+  const github = initWiki({ wikiDir: path.join(dir, 'wiki'), repo: dir, repoUrl: 'https://github.com/o/r', branch: 'main' })
+  assert.equal(github.state.host, 'github')
+  assert.equal(github.state.repoUrl, 'https://github.com/o/r')
+  // Without a new URL the recorded host stays, and an explicit --host always wins.
+  assert.equal(initWiki({ wikiDir: path.join(dir, 'wiki'), repo: dir, depth: 'crisp' }).state.host, 'github')
+  assert.equal(initWiki({ wikiDir: path.join(dir, 'wiki'), repo: dir, repoUrl: 'https://git.example.com/o/r', host: 'gitlab' }).state.host, 'gitlab')
+  assert.equal(initWiki({ wikiDir: path.join(dir, 'wiki'), repo: dir, repoUrl: 'none' }).state.host, 'local')
 })
 
 test('the checker catches stale and hand-written llms copies', (t) => {

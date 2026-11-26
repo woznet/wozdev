@@ -53,9 +53,9 @@ Pick one of the two pipelines:
 | Site | Scaffold only, no `npm install` or build | Scaffold, `npm install`, and build (skip with `--no-build`) |
 | Also writes | `AGENTS.md`/`CLAUDE.md` (root and `wiki/`), llms files | The same |
 
-Neither pipeline creates a deploy workflow. Add a focus area (a subsystem or folder) to narrow either one (`/deep-wiki:generate src/api`): only that part is written and nothing is deleted.
+Neither pipeline creates a deploy workflow. Add a focus area (a subsystem or folder) to narrow either one (`/deep-wiki:generate src/api`). With `generate`, only that part of the catalogue and its pages are written, at the wiki's recorded depth, and nothing is deleted. With `crisp`, a focus works on a fresh repository only; on an existing wiki it stops and points to `generate <focus>` or `page`.
 
-Running `generate` on an existing wiki asks whether to regenerate, fill in what is missing, or stop; see [Write Modes](#write-modes). `/deep-wiki:catalogue` followed by `/deep-wiki:generate` with "fill missing" keeps the catalogue you reviewed. Running `crisp` on an existing wiki asks before replacing it. To move a crisp wiki to full depth, run `generate` and choose regenerate.
+Running `generate` on an existing wiki asks whether to regenerate, fill in what is missing, or stop; see [Write Modes](#write-modes). `/deep-wiki:catalogue` followed by `/deep-wiki:generate` with "fill missing" keeps the catalogue you reviewed. Running `crisp` on an existing wiki asks before replacing it: it lists the old section pages, the catalogue, the landing page, and the other onboarding guides for deletion, and keeps `research/` and `changelog.md`. To move a crisp wiki to full depth, run `generate` and choose regenerate.
 
 ### 3. Preview the Site
 

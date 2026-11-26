@@ -73,7 +73,8 @@ Required sections, in order:
 ## Step 3: Generated Indexes and the Checker
 
 1. Run `node wiki/scripts/gen-section-indexes.mjs wiki`. It writes each section's `index.md` from `catalogue.json` and `onboarding/index.md` from the guides that exist. Never write these by hand. Add `--force` in `regenerate` write mode.
-2. Run `node wiki/scripts/check-wiki.mjs wiki` and fix every error in the page it names, then rerun. Conventions section 10 lists the findings. When this skill runs on its own (`/deep-wiki:build`), fix what `--site` reports and only report the rest to the user.
+2. If `wiki/llms.txt` exists, run `node wiki/scripts/gen-llms.mjs wiki`. The deployment copies in `wiki/public/` are written only once the site exists, so a wiki whose llms files predate the scaffold has none until this runs.
+3. Run `node wiki/scripts/check-wiki.mjs wiki` and fix every error in the page it names, then rerun. Conventions section 10 lists the findings. When this skill runs on its own (`/deep-wiki:build`), fix what `--site` reports and only report the rest to the user.
 
 ## Step 4: Build (only when asked or when verifying)
 
@@ -100,6 +101,7 @@ Requires Node 22.12 or newer (Mermaid 12). The build runs `check-wiki.mjs . --si
 | Preview shows old styles after a rebuild | `vitepress preview` caches `dist/` at start | Restart the preview |
 | `logo.svg` or `llms.txt` 404 on the deployed site | Files in `.vitepress/public/` | VitePress serves `wiki/public/` |
 | Broken assets on GitHub Pages | Wrong `base` | `node wiki/scripts/init-wiki.mjs wiki --base <repo-name>` |
-| `npm install` fails with `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | `vitepress-plugin-mermaid` predates Mermaid 12 | Keep the template's `overrides` entry in `wiki/package.json` |
+| `npm install` fails with `ERESOLVE` on peer `mermaid@"10 \|\| 11"` | `vitepress-plugin-mermaid` predates Mermaid 12 | Keep the template's `overrides` entry in `wiki/package.json`. If it is gone, rerun `init-wiki.mjs` with `--write-mode regenerate`, which replaces the whole scaffold |
+| A diagram shows as a code block | The fence was not opened with exactly ```` ```mermaid ```` | Fix the opening line |
 | Diagrams re-laid out or restyled (ELK layout, "neo" look) | Mermaid 12 defaults | Keep `layout: 'dagre'` and `look: 'classic'` in the `mermaid` config |
 | A light/dark toggle appears | `appearance: 'dark'` | Keep `appearance: 'force-dark'` |
