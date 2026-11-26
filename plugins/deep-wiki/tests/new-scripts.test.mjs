@@ -177,8 +177,8 @@ test('gen-llms writes five files that pass the checker', (t) => {
 
   const index = read(wiki, 'llms.txt')
   assert.match(index, /^# Demo\n.*\n\n> Demo project that does one thing well\.\n/)
-  // Onboarding first, then catalogue sections in catalogue order, then other pages.
-  assert.deepEqual([...index.matchAll(/^## (.+)$/gm)].map((m) => m[1]), ['Onboarding', 'Core', 'More'])
+  // The landing page leads, then onboarding, then catalogue sections in catalogue order. No lone 'More'.
+  assert.deepEqual([...index.matchAll(/^## (.+)$/gm)].map((m) => m[1]), ['Start Here', 'Onboarding', 'Core'])
   assert.match(index, /- \[Alpha v2\]\(\.\/01-core\/alpha\.md\): What alpha does\./)
   assert.match(read(dir, 'llms.txt'), /- \[Alpha v2\]\(\.\/wiki\/01-core\/alpha\.md\): What alpha does\./)
 })

@@ -122,6 +122,14 @@ test('a wiki without a catalogue gets the onboarding hub only', (t) => {
   assert.ok(!exists(dir, '01-architecture/index.md'))
 })
 
+test('a wiki without onboarding guides says the hub was not written', (t) => {
+  const dir = wiki(t, { '01-architecture/overview.md': page('Overview', 'O.') })
+  const run = generate(dir)
+  assert.equal(run.code, 0)
+  assert.match(run.out, /no onboarding guides; hub not written/)
+  assert.ok(!exists(dir, 'onboarding/index.md'))
+})
+
 test('hand-written hubs are kept unless --force', (t) => {
   const mine = '---\ntitle: Mine\ndescription: Mine.\n---\n\n# Mine\n'
   const dir = wiki(

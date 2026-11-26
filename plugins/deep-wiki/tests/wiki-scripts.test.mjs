@@ -612,7 +612,8 @@ test('--json prints one object, also for usage errors; --report prints the table
   assert.equal(JSON.parse(usageError.stdout).ok, false)
   const report = cli(f.wiki, '--repo', f.repo, '--report').stdout
   assert.match(report, /\| Section \| Pages \| Diagrams \| Cited files \|/)
-  assert.match(report, /\| 01-getting-started \| 3 \| 6 \| 5 \|/)
+  // Rows carry the section's catalogue name, not its folder name.
+  assert.match(report, /\| Getting Started \| 3 \| 6 \| 5 \|/)
   assert.match(report, /\| Total \| 4 \| 6 \| 5 \|/)
 })
 

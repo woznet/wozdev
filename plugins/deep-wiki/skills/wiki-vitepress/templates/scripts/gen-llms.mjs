@@ -196,6 +196,9 @@ export function genLlms(options) {
   }
   const under = (dir) => paths.filter((p) => p.startsWith(`${dir}/`))
 
+  // The landing page leads; `More` is kept for other root pages (changelog.md and the like).
+  addSection('Start Here', ['index.md'], null)
+
   const onboarding = under('onboarding')
   const ordered = ONBOARDING_ORDER.map((f) => `onboarding/${f}`)
   addSection('Onboarding', [...ordered, ...onboarding.filter((p) => !ordered.includes(p))], 'onboarding/index.md')
@@ -221,7 +224,7 @@ export function genLlms(options) {
     const name = /^\d+-/.test(dir) && pages.has(index) && pages.get(index).title.length <= 60 ? pages.get(index).title : titleCase(dir)
     addSection(name, [index, ...under(dir)], index)
   }
-  addSection('More', ['index.md', ...paths.filter((p) => !p.includes('/'))], null)
+  addSection('More', paths.filter((p) => !p.includes('/')), null)
 
   const project = oneLine(catalogue?.project || readConfigConst(wikiDir, 'SITE_TITLE') || path.basename(repoRoot))
   const summary = oneLine(input.summary ?? catalogue?.summary ?? readConfigConst(wikiDir, 'SITE_DESCRIPTION'))

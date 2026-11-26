@@ -923,9 +923,17 @@ export function checkWiki(options) {
     const pages = checked.map(([file, p]) => ({ file, diagrams: p.diagrams, citedFiles: p.cited.size }))
     // Per section: distinct cited files, so a file cited by three pages counts once.
     const groups = new Map()
+    // Rows are labelled with the section's catalogue name; the folder name is the fallback.
+    const sectionNames = new Map()
+    for (const node of Array.isArray(catalogue?.items) ? catalogue.items : []) {
+      if (node && typeof node.dir === 'string' && typeof node.name === 'string' && node.name.trim()) {
+        sectionNames.set(node.dir.replace(/\\/g, '/').replace(/^\.?\/+|\/+$/g, ''), node.name.trim())
+      }
+    }
     for (const [file, p] of checked) {
       const key = file.includes('/') ? file.split('/')[0] : '(root)'
-      const g = groups.get(key) ?? groups.set(key, { section: key, pages: 0, diagrams: 0, files: new Set() }).get(key)
+      const label = sectionNames.get(key) ?? (key === 'onboarding' ? 'Onboarding' : key)
+      const g = groups.get(key) ?? groups.set(key, { section: label, pages: 0, diagrams: 0, files: new Set() }).get(key)
       g.pages++
       g.diagrams += p.diagrams
       for (const f of p.cited) g.files.add(f)

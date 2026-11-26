@@ -143,7 +143,11 @@ if (fs.existsSync(onboardingDir)) {
       return `| [${linkText(fm.title || f.replace(/\.md$/, ''))}](./${f}) | ${AUDIENCE[f] ?? ''} | ${cell(fm.description)} |`
     })
     writeHub('onboarding/index.md', 'Onboarding', 'Guides to this codebase, one per audience. Pick the one written for you.', ['Guide', 'Audience', 'What it covers'], rows)
+  } else {
+    console.log('no onboarding guides; hub not written')
   }
+} else {
+  console.log('no onboarding guides; hub not written')
 }
 
 // ---- prune ------------------------------------------------------------------
