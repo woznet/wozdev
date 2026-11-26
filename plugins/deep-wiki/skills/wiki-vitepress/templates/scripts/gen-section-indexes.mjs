@@ -13,7 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MARKER, ONBOARDING_ORDER, SKIP_FILES, isMarked, loadCatalogue, parseFrontmatter, readText, relativeInside, resolveDir, sectionDirProblem, walkCatalogue, yamlString } from './lib.mjs'
+import { MARKER, ONBOARDING_ORDER, SKIP_FILES, assertInside, isMarked, loadCatalogue, parseFrontmatter, readText, relativeInside, resolveDir, sectionDirProblem, walkCatalogue, yamlString } from './lib.mjs'
 
 export class UsageError extends Error {}
 
@@ -89,6 +89,16 @@ export function genIndexes(options) {
     if (!sections.length) throw new UsageError('catalogue.json has no sections (an `items` array of nodes with a `dir`); nothing was written')
   }
 
+  // Every file this run may write or delete, checked where it would really land: the section
+  // folder being inside the wiki is not enough when index.md itself, or a folder above it,
+  // is a symlink that points somewhere else.
+  try {
+    for (const { dir } of sections) assertInside(wikiDir, path.join(wikiDir, dir, 'index.md'), 'section index')
+    assertInside(wikiDir, path.join(wikiDir, 'onboarding', 'index.md'), 'onboarding hub')
+  } catch (e) {
+    throw new UsageError(e.message)
+  }
+
   const written = []
   const skipped = []
   const removed = []
@@ -159,17 +169,26 @@ export function genIndexes(options) {
       })
     writeHub('onboarding/index.md', 'Onboarding', 'Guides to this codebase, one per audience. Pick the one written for you.', ['Guide', 'Audience', 'What it covers'], rows)
   } else {
-    messages.push('no onboarding guides; hub not written')
+    const hub = path.join(onboardingDir, 'index.md')
+    if (fs.existsSync(hub) && isMarked(readText(hub))) {
+      // The guides it listed are gone. Rewrite it empty, so no row links to a deleted page.
+      writeHub('onboarding/index.md', 'Onboarding', 'No onboarding guides have been written yet.', [], [])
+      messages.push('no onboarding guides; the generated hub was emptied')
+    } else {
+      messages.push('no onboarding guides; hub not written')
+    }
   }
 
   // ---- prune ------------------------------------------------------------------
   if (prune && catalogue) {
     const visit = (dir) => {
+      // Never follow a link out of the wiki: nothing outside it is ours to delete.
+      if (relativeInside(wikiDir, path.join(wikiDir, dir)) === null) return
       for (const e of fs.readdirSync(path.join(wikiDir, dir), { withFileTypes: true })) {
         if (e.isDirectory() && !e.name.startsWith('.')) visit(`${dir}/${e.name}`)
       }
       const index = path.join(wikiDir, dir, 'index.md')
-      if (!sectionDirs.has(dir) && fs.existsSync(index) && isMarked(readText(index))) {
+      if (!sectionDirs.has(dir) && fs.existsSync(index) && relativeInside(wikiDir, index) !== null && isMarked(readText(index))) {
         fs.rmSync(index)
         removed.push(`${dir}/index.md`)
         if (!fs.readdirSync(path.join(wikiDir, dir)).length) fs.rmdirSync(path.join(wikiDir, dir))

@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const scripts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../skills/wiki-vitepress/templates/scripts')
 const generator = path.join(scripts, 'gen-section-indexes.mjs')
 const { checkWiki } = await import(pathToFileURL(path.join(scripts, 'check-wiki.mjs')).href)
-const { MARKER } = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
+const { MARKER, relativeInside } = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
 
 const page = (title, description) => `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\n---\n\n# Page\n\nBody.\n`
 const leaf = (slug, dir) => ({ title: slug, name: slug, path: `${dir}/${slug}.md`, prompt: 'Read src/a.ts and src/b.ts.', children: [] })
@@ -252,4 +252,66 @@ test('a catalogue page nobody has written yet gets no row, so the index has no d
   assert.doesNotMatch(index, /auth\.md/)
   const result = checkWiki({ wikiDir: dir, site: true, source: false })
   assert.deepEqual(result.errors.filter((f) => f.rule === 'link'), [])
+})
+
+/** A directory link that needs no special rights on Windows (a junction) or anywhere else. */
+const linkDir = (target, link) => fs.symlinkSync(target, link, 'junction')
+
+test('a section folder that is a link out of the wiki is refused before anything is written', (t) => {
+  const dir = wiki(t, { '02-other/a.md': page('A', 'A page.') }, {
+    project: 'P',
+    summary: 'S',
+    items: [
+      { title: 'core', name: 'Core', dir: '01-core', description: 'Core.', children: [{ title: 'storage', name: 'Storage', dir: '01-core/storage', description: 'Storage.', children: [leaf('disk', '01-core/storage')] }] },
+      { title: 'other', name: 'Other', dir: '02-other', description: 'Other.', children: [leaf('a', '02-other')] },
+    ],
+  })
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outside-'))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  linkDir(outside, path.join(dir, '01-core'))
+  const result = generate(dir)
+  assert.equal(result.code, 2)
+  assert.match(result.out, /inside the wiki|resolves outside/)
+  assert.deepEqual(fs.readdirSync(outside), [], 'nothing was created through the link')
+  // A folder that does not exist yet, below the link, also resolves to where it would land.
+  assert.equal(relativeInside(dir, path.join(dir, '01-core', 'storage', 'index.md')), null)
+  assert.equal(relativeInside(dir, path.join(dir, '02-other', 'new', 'index.md')), '02-other/new/index.md')
+  assert.ok(!exists(dir, '02-other/index.md'), 'nothing was written at all')
+})
+
+test('a hub file that is a link to a file outside the wiki is refused', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Cache', 'Cache.'), '01-core/auth.md': page('Auth', 'Auth.') }, { project: 'P', summary: 'S', items: [SECTION] })
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outside-'))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  const victim = path.join(outside, 'index.md')
+  const original = `# Theirs\n${MARKER}\n`
+  fs.writeFileSync(victim, original)
+  try {
+    fs.symlinkSync(victim, path.join(dir, '01-core/index.md'), 'file')
+  } catch {
+    return t.skip('this account may not create file symlinks')
+  }
+  const result = generate(dir)
+  assert.equal(result.code, 2)
+  assert.match(result.out, /resolves outside/)
+  assert.equal(fs.readFileSync(victim, 'utf8'), original)
+})
+
+test('a generated onboarding hub is emptied when its last guide is removed; a hand-written one is kept', (t) => {
+  const dir = wiki(t, { 'onboarding/contributor-guide.md': page('Contributor Guide', 'Start here.') })
+  assert.equal(generate(dir).code, 0)
+  assert.match(read(dir, 'onboarding/index.md'), /contributor-guide\.md/)
+  fs.rmSync(path.join(dir, 'onboarding/contributor-guide.md'))
+  const result = generate(dir)
+  assert.equal(result.code, 0)
+  assert.match(result.out, /emptied/)
+  const hub = read(dir, 'onboarding/index.md')
+  assert.doesNotMatch(hub, /contributor-guide/)
+  assert.match(hub, /No onboarding guides have been written yet/)
+  assert.deepEqual(checkWiki({ wikiDir: dir, site: true, source: false }).errors.filter((f) => f.rule === 'link'), [])
+
+  const manual = '---\ntitle: "Onboarding"\ndescription: "Mine."\n---\n\n# Onboarding\n\nSee [Guide](./gone.md).\n'
+  fs.writeFileSync(path.join(dir, 'onboarding/index.md'), manual)
+  assert.equal(generate(dir).code, 0)
+  assert.equal(read(dir, 'onboarding/index.md'), manual)
 })

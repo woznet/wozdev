@@ -1097,3 +1097,13 @@ test('--page prints the diagram and cited-file numbers of each page', (t) => {
   const json = JSON.parse(cli(f.wiki, '--repo', f.repo, '--page', '01-getting-started/usage.md', '--json').stdout)
   assert.ok(!('pageLines' in json))
 })
+
+test('escapes in a double-quoted frontmatter value are decoded', async () => {
+  const { parseFrontmatter } = await import(pathToFileURL(path.join(scripts, 'lib.mjs')).href)
+  const fm = parseFrontmatter('---\ntitle: "Caf\\u00e9 \\x41\\tB \\"q\\" \\\\ \\U0001F600"\ndescription: "ok"\n---\n')
+  assert.deepEqual(fm.issues, [])
+  assert.equal(fm.data.title, 'Caf\u00e9 A\tB "q" \\ \u{1F600}')
+  // Six escaped characters must count as six, not as their source length, for the title limit.
+  const long = parseFrontmatter(`---\ntitle: "${'\\u00e9'.repeat(40)}"\ndescription: "ok"\n---\n`)
+  assert.equal(long.data.title.length, 40)
+})

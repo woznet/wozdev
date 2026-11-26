@@ -514,3 +514,15 @@ test('the checker catches stale and hand-written llms copies', (t) => {
   has(/^public\/llms\.txt: \/other\/x is outside the site base \/r\//)
   assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false, site: true })), [])
 })
+
+test('init-wiki refuses to write a scaffold file through a link that leaves the wiki', (t) => {
+  const dir = repo(t)
+  init(dir)
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'deep-wiki-outside-'))
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }))
+  const theme = path.join(dir, 'wiki/.vitepress/theme')
+  fs.rmSync(theme, { recursive: true, force: true })
+  fs.symlinkSync(outside, theme, 'junction')
+  assert.throws(() => init(dir, { writeMode: 'regenerate' }), /resolves outside/)
+  assert.deepEqual(fs.readdirSync(outside), [], 'nothing was written through the link')
+})

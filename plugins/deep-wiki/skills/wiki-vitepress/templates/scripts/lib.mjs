@@ -57,6 +57,21 @@ export function listPages(wikiDir) {
 // Escapes a YAML double-quoted scalar accepts. "C:\Users" is not one of them, and the build fails on it.
 const YAML_ESCAPE = /\\(?:[0abtnvfre "/\\N_LP]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/y
 
+const YAML_SIMPLE_ESCAPES = {
+  0: '\0', a: '\x07', b: '\b', t: '\t', '\t': '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b',
+  ' ': ' ', '"': '"', '/': '/', '\\': '\\', N: '\x85', _: '\xa0', L: '\u2028', P: '\u2029',
+}
+
+/** The character a YAML double-quoted escape stands for (`\\u00e9` is `é`). */
+function yamlUnescape(escape) {
+  const kind = escape[1]
+  if (kind === 'x' || kind === 'u' || kind === 'U') {
+    const code = parseInt(escape.slice(2), 16)
+    return code <= 0x10ffff ? String.fromCodePoint(code) : escape
+  }
+  return YAML_SIMPLE_ESCAPES[kind] ?? escape
+}
+
 /** Read a quoted YAML scalar: `{ value, problem }`. A trailing ` # comment` is allowed. */
 function readQuoted(raw) {
   const q = raw[0]
@@ -69,7 +84,7 @@ function readQuoted(raw) {
       if (!esc) {
         return { value: raw.slice(1), problem: `has an invalid escape "${raw.slice(i, i + 2)}"; write a backslash as \\\\ or use single quotes` }
       }
-      value += esc[0] === '\\"' ? '"' : esc[0] === '\\\\' ? '\\' : esc[0] === '\\/' ? '/' : esc[0]
+      value += yamlUnescape(esc[0])
       i += esc[0].length - 1
     } else if (q === "'" && c === "'" && raw[i + 1] === "'") {
       value += "'"
@@ -286,10 +301,24 @@ export function resolveSite(wikiDir, state = loadState(wikiDir)) {
 
 /** The path as the file system spells it: symlinks, junctions, short names, and drive-letter case resolved. */
 export function realPath(p) {
+  const full = path.resolve(p)
   try {
-    return fs.realpathSync.native(p)
+    return fs.realpathSync.native(full)
   } catch {
-    return path.resolve(p)
+    // Not there yet. Resolve the deepest folder that does exist, then add the missing part,
+    // so a symlinked ancestor still shows where a file written here would really land.
+    const parent = path.dirname(full)
+    return parent === full ? full : path.join(realPath(parent), path.basename(full))
+  }
+}
+
+/**
+ * Throw unless `file` would be written inside `root`. Follows symlinks and junctions on the
+ * file itself and on every folder above it, so neither can redirect a write out of the wiki.
+ */
+export function assertInside(root, file, what = 'path') {
+  if (relativeInside(root, file) === null) {
+    throw new Error(`${what} ${posix(path.relative(root, file))} resolves outside ${posix(root)} (a symlink or junction points elsewhere); nothing was written`)
   }
 }
 

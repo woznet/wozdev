@@ -28,6 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  assertInside,
   MARKER,
   ONBOARDING_ORDER,
   createFenceScanner,
@@ -413,6 +414,12 @@ export function genLlms(options) {
   const shown = (file) => (repoRoot ? posix(path.relative(repoRoot, file)) : posix(path.join(path.basename(wikiDir), path.relative(wikiDir, file)))) || path.basename(file)
   const write = (file, content, guard) => {
     const label = shown(file)
+    // A wiki file stays in the wiki and the root file in the repository, symlinks included.
+    try {
+      assertInside(guard ? repoRoot : wikiDir, file, 'llms file')
+    } catch (e) {
+      throw new UsageError(e.message)
+    }
     const existed = fs.existsSync(file)
     if (guard && existed && !options.force && !isMarked(readText(file))) {
       files.push({ path: label, action: 'skipped', bytes: 0 })

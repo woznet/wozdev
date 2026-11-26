@@ -37,7 +37,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { baseFromArg, configConstPattern, inferHost, loadCatalogue, loadState, posix, readConfigConst, readConfigLiteral, realPath, repoUrlFromArg, resolveRepoRoot, resolveSite } from './lib.mjs'
+import { assertInside, baseFromArg, configConstPattern, inferHost, loadCatalogue, loadState, posix, readConfigConst, readConfigLiteral, realPath, repoUrlFromArg, resolveRepoRoot, resolveSite } from './lib.mjs'
 
 const HOSTS = ['github', 'gitlab', 'azure-devops', 'local']
 const DEPTHS = ['full', 'crisp']
@@ -242,6 +242,16 @@ export function initWiki(options) {
     if (ignored.length && !options.scriptsOnly) {
       notes.push(`kept the ${ignored.join(' and ')} already in .vitepress/config.mts (edit the file to change ${ignored.length > 1 ? 'them' : 'it'}, or use --write-mode regenerate)`)
     }
+  }
+
+  // Nothing may be written through a symlink that leaves the wiki folder: check where every
+  // destination really lands before the first write.
+  try {
+    for (const item of planned) if (!item.keep) assertInside(wikiDir, path.join(wikiDir, item.path), 'scaffold file')
+    if (patchedConfig !== null) assertInside(wikiDir, configPath, 'scaffold file')
+    assertInside(wikiDir, path.join(wikiDir, '.deep-wiki.json'), 'state file')
+  } catch (e) {
+    throw new UsageError(e.message)
   }
 
   for (const item of planned) {
