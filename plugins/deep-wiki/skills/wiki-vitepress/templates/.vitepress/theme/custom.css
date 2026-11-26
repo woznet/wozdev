@@ -28,19 +28,31 @@
 }
 
 /* ---------- Layout and content ---------- */
-/* The default theme caps the text column at 688px; wikis are table- and diagram-heavy.
-   The two extra ancestors outrank the default theme's scoped rule of the same shape. */
-.Layout .VPContent .VPDoc.has-aside .content-container {
-  max-width: 860px;
-}
-/* The cap alone stops at 784px: the page frame (1440px) minus sidebar, outline, and padding.
-   Widen the frame on screens that have the room. Sidebar, nav bar, and content all derive
-   their offsets from this variable, so they stay aligned. Never set it wider than the
-   viewport: the offsets would go negative. */
-@media (min-width: 1536px) {
+/* Use the whole window. The default theme centres a 1440px frame and caps the text column
+   at 688px, which leaves wide blank margins on a large screen; wikis are table- and
+   diagram-heavy and read better with the room.
+   - The frame: sidebar, nav bar, and content all derive their offsets from this variable,
+     so they stay aligned. 100vw pins the sidebar to the left edge and the outline to the
+     right. The cap only matters on ultrawide screens, where uncapped lines of text
+     would run too long to read.
+   - The text column: takes everything between the sidebar and the outline. The extra
+     ancestors outrank the default theme's scoped rules of the same shape. */
+@media (min-width: 1440px) {
   :root {
-    --vp-layout-max-width: 1536px;
+    --vp-layout-max-width: min(100vw, 2200px);
   }
+}
+.Layout .VPContent .VPDoc .container {
+  max-width: none;
+}
+.Layout .VPContent .VPDoc .content {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+.Layout .VPContent .VPDoc .content-container,
+.Layout .VPContent .VPDoc.has-aside .content-container {
+  max-width: none;
 }
 /* Nothing in a page may push past the text column into the outline. */
 .vp-doc {
@@ -86,8 +98,8 @@
 }
 
 /* ---------- Tables ---------- */
-/* Keep the default theme's block display: a table wider than the column scrolls inside
-   its own box. `display: table` cannot scroll and spills into the outline. */
+/* Narrow screens keep the default theme's block display: a table wider than the column
+   scrolls inside its own box instead of spilling out. */
 .vp-doc table {
   display: block;
   max-width: 100%;
@@ -100,10 +112,17 @@
 .vp-doc td a {
   overflow-wrap: anywhere;
 }
-/* With wrapping allowed anywhere, a narrow column could collapse to a few characters.
-   Phones are exempt: there a floor would force every 4-column table to scroll. */
-@media (min-width: 640px) {
+/* With a sidebar-width or wider column there is room: the table fills the column, and
+   because any cell may wrap anywhere it can always shrink to fit, so it never spills. */
+@media (min-width: 960px) {
+  .vp-doc table {
+    display: table;
+    width: 100%;
+    overflow-x: visible;
+  }
   .vp-doc td {
+    overflow-wrap: anywhere;
+    /* A floor, so a squeezed column wraps between words before it breaks inside them. */
     min-width: 6em;
   }
 }
