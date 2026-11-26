@@ -83,7 +83,7 @@ Follow `deep-wiki:wiki-llms-txt`. Every page, the hub, and the landing page exis
 1. Run `node wiki/scripts/check-wiki.mjs wiki --baseline wiki/.vitepress/cache/deep-wiki-baseline.txt` (omit `--baseline` outside git). Fix every error at its source in pages this run wrote, then rerun. Fix the warnings you can. Report errors in pages this run did not write, and the expected `catalogue-drift` errors of a focus run (Step 2).
 2. If a fix changed any page, rerun `node wiki/scripts/gen-llms.mjs wiki`; if it changed a title or description, rerun the `gen-section-indexes` command from Step 3 first. Then rerun the check.
 3. `leftover` warnings name files that appeared or changed in the repository during the run. List them and ask the user what to do. Delete nothing on your own.
-4. Unless the arguments contain `--no-build`: `npm --prefix wiki install`, then `npm --prefix wiki run build`. Fix a build error at its source page and rebuild. If the failing page is one the user chose to keep or that existed before a `fill-missing` run, tell the user which page and stop. Confirm `wiki/.vitepress/dist/llms.txt` exists.
+4. Unless the arguments contain `--no-build`: `npm --prefix wiki install`, then `npm --prefix wiki run build`. Fix a build error at its source page and rebuild. If the failing page is one the user chose to keep or that existed before a `fill-missing` run, tell the user which page and stop. Confirm `wiki/.vitepress/dist/llms.txt` exists. A clean check and build do not prove the diagrams render: neither can detect a Mermaid syntax error.
 
 ## Step 8: Report
 
@@ -91,7 +91,7 @@ Follow `deep-wiki:wiki-llms-txt`. Every page, the hub, and the landing page exis
 2. The checker's summary line, and any findings left in place with the reason.
 3. Files created, replaced, deleted, and skipped. With a focus: the catalogue pages outside it that are still unwritten, and "landing page not updated" when Step 4 noted it.
 4. The build result, or "build skipped".
-5. Next steps: `npm --prefix wiki run dev` to preview (check a few diagrams render). When `HOST` is `github` and the remote is on github.com, also `/deep-wiki:deploy` to publish to GitHub Pages.
+5. Next steps: `npm --prefix wiki run dev` to preview. Say plainly that diagram syntax was not verified, and ask the user to open the preview and look for diagrams that did not render (an empty box where a diagram should be). When `HOST` is `github` and the remote is on github.com, also `/deep-wiki:deploy` to publish to GitHub Pages.
 
 ## Arguments
 

@@ -64,6 +64,24 @@ const LLMS_MAX_BYTES = 5 * 1024
 const SEQUENCE_MAX_PARTICIPANTS = 6
 const GIT_MAX_BUFFER = 256 * 1024 * 1024
 
+// Words the Mermaid 12 sequence grammar reserves: one of these as a participant id, in any letter case,
+// is a parse error and the diagram does not render. Verified against the parser; "link", "links",
+// "properties", "as", and "of" parse fine as ids and are not listed.
+const SEQUENCE_KEYWORDS = new Set(
+  ('opt alt else loop par par_over and end rect critical option break note box activate deactivate create destroy ' +
+    'title over autonumber participant actor acctitle accdescr').split(' '),
+)
+
+/** Participant ids of one sequence-diagram line: declared ones, and message senders and receivers. */
+function sequenceIds(line) {
+  const text = line.trim()
+  const declared = text.match(/^(?:create\s+)?(?:participant|actor)\s+([^\s:]+)/i)
+  if (declared) return [declared[1]]
+  // "A->>B: text", with any arrow and optional activation marks.
+  const message = text.match(/^([A-Za-z_][\w.]*)\s*(?:<<)?-{1,2}(?:>>|>|x|\))\s*[+-]?\s*([A-Za-z_][\w.]*)\s*:/)
+  return message ? [message[1], message[2]] : []
+}
+
 // Minimums per page kind. `files` is the number of distinct source files cited.
 const THRESHOLDS = {
   full: {
@@ -740,6 +758,20 @@ export function checkWiki(options) {
         if (participants > SEQUENCE_MAX_PARTICIPANTS) {
           warn(rel, block.start, 'mermaid', `${participants} participants (max ${SEQUENCE_MAX_PARTICIPANTS}); split the diagram so it stays readable at page width`)
         }
+        const reported = new Set()
+        for (const { n, text } of body.slice(1)) {
+          for (const id of sequenceIds(text)) {
+            if (!SEQUENCE_KEYWORDS.has(id.toLowerCase()) || reported.has(id)) continue
+            reported.add(id)
+            error(rel, n, 'mermaid', `participant id "${id}" is a Mermaid keyword and the diagram will not render; rename it (for example "Options" in place of "Opt")`)
+          }
+        }
+      }
+      if (type === 'flowchart') {
+        // "end" closes a subgraph; as a node id (next to an arrow or a shape) it breaks the parser.
+        const asNode = /(?:[-=.]>|-{2,3}|={2,3}|\|)\s*end\s*(?:$|[;&[({>]|-{2}|={2}|-\.)|^\s*end\s*(?:[[({>]|-{2}|={2}|-\.|&)/
+        const bad = body.slice(1).find((l) => asNode.test(l.text))
+        if (bad) error(rel, bad.n, 'mermaid', 'node id "end" is a Mermaid keyword and the diagram will not render; rename it (for example "End" or "finish")')
       }
       for (const { n, text } of block.lines) {
         if (/<br\s*\/>/i.test(text)) error(rel, n, 'mermaid', 'use <br> in labels, not <br/>')
@@ -951,6 +983,7 @@ export function checkWiki(options) {
     }
     page.cited = cited
     page.diagrams = diagrams
+    page.types = [...types]
   }
 
   if (pageMode) return finish()
@@ -1145,7 +1178,15 @@ export function checkWiki(options) {
     if (repoRootGuessed && opts.source && !opts.site && !opts.catalogueOnly) {
       notes.push(`no repository root is known (no --repo, no recorded root, not in git): citations were checked against ${posix(repoRoot)}`)
     }
-    return { ok: errors.length === 0, mode: opts.mode, errors, warnings, stats, pages, report, repoRoot: posix(repoRoot), notes }
+    const result = { ok: errors.length === 0, mode: opts.mode, errors, warnings, stats, pages, report, repoRoot: posix(repoRoot), notes }
+    // For the plain-text --page output only; kept out of --json.
+    Object.defineProperty(result, 'pageLines', {
+      enumerable: false,
+      value: opts.pages.length > 0
+        ? checked.map(([file, p]) => `${file}: ${p.diagrams} diagram(s)${p.types.length ? ` (${p.types.join(', ')})` : ''}, ${p.cited.size} cited file(s)`)
+        : [],
+    })
+    return result
   }
 }
 
@@ -1174,6 +1215,7 @@ function main() {
       console.log('\n| Section | Pages | Diagrams | Cited files |\n|---------|-------|----------|-------------|')
       for (const r of result.report) console.log(`| ${r.section} | ${r.pages} | ${r.diagrams} | ${r.citedFiles} |`)
     }
+    if (result.pageLines.length) console.log('\n' + result.pageLines.join('\n'))
     const s = result.stats
     console.log(
       `\n${result.mode} | catalogue: ${s.sections} section(s), ${s.leaves} page(s) | checked ${s.pages} page(s), ${s.diagrams} diagram(s) | ` +

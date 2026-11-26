@@ -192,7 +192,7 @@ The checker reads the depth (full or crisp) from `wiki/.deep-wiki.json`, and the
 - **Errors**: missing, YAML-unsafe, or over-long frontmatter titles; `{{ }}` and tag-shaped text outside code; Mermaid rule breaks (`<br/>`, no `autonumber`, light fills); broken relative links, folder links, and links that leave the wiki; cited files or line ranges that do not exist; pages under the diagram and citation minimums; catalogue schema problems and pages never written; unfilled placeholders; malformed or incomplete llms files.
 - **Warnings**: wide tables, dead `#anchor` links, diagrams without a `Sources` comment, pages missing from the catalogue, an `llms.txt` over 5 KB, and files that appeared or changed in the repository during a run.
 
-It does not parse Mermaid syntax; preview the site to verify diagrams.
+Mermaid syntax is not validated beyond the listed rules (which include keywords used as sequence participant or flowchart node ids): preview the site and look for diagrams that did not render.
 
 ## Design Principles
 

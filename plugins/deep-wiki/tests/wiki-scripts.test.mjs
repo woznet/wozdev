@@ -1051,3 +1051,49 @@ test('reference definitions are checked, used or not, with any title form', (t) 
   const ok = ['See [Setup][s] and [the same page](./setup.md \'Setup\') or [again](./setup.md (Setup)).', '', '[s]: ./setup.md "Setup"'].join('\n')
   assert.deepEqual(run(fixture(t, usage(ok))).errors, [])
 })
+
+test('a Mermaid keyword as a sequence participant id is an error, in any letter case', (t) => {
+  // Seen in a real run: "Opt" as a participant stopped two diagrams rendering.
+  const implicit = diagram('sequenceDiagram', '  autonumber', '  Lib->>Opt: read', '  Opt-->>Lib: value')
+  const result = run(fixture(t, usage(implicit)))
+  assert.deepEqual(rules(result), ['mermaid'])
+  assert.match(messages(result), /participant id "Opt" is a Mermaid keyword/)
+  const declared = diagram('sequenceDiagram', '  autonumber', '  participant END', '  actor Note', '  A->>B: x')
+  assert.deepEqual(rules(run(fixture(t, usage(declared)))), ['mermaid', 'mermaid'])
+  // Ids that only start with a keyword, a keyword used as an alias label, and the keywords
+  // in their own role all parse and must pass.
+  const fine = diagram(
+    'sequenceDiagram',
+    '  autonumber',
+    '  participant Options',
+    '  participant X as Opt',
+    '  participant Link',
+    '  Options->>Endpoint: call',
+    '  opt cached',
+    '    Endpoint-->>Options: hit',
+    '  end',
+    '  Note over Options,X: done',
+    '  X->>Link: follow',
+  )
+  assert.deepEqual(run(fixture(t, usage(fine))).errors, [])
+})
+
+test('"end" as a flowchart node id is an error; closing a subgraph with it is not', (t) => {
+  const bad = diagram('flowchart TD', '  start --> work', '  work --> end')
+  const result = run(fixture(t, usage(bad)))
+  assert.deepEqual(rules(result), ['mermaid'])
+  assert.match(messages(result), /node id "end"/)
+  const fine = diagram('flowchart TD', '  subgraph Group', '    a --> b', '  end', '  b --> End', '  End --> endpoint')
+  assert.deepEqual(run(fixture(t, usage(fine))).errors, [])
+})
+
+test('--page prints the diagram and cited-file numbers of each page', (t) => {
+  const f = fixture(t)
+  const out = cli(f.wiki, '--repo', f.repo, '--page', '01-getting-started/usage.md')
+  assert.equal(out.status, 0)
+  assert.match(out.stdout, /^01-getting-started\/usage\.md: 3 diagram\(s\) \(flowchart, sequenceDiagram\), 5 cited file\(s\)$/m)
+  const whole = cli(f.wiki, '--repo', f.repo)
+  assert.doesNotMatch(whole.stdout, /usage\.md: \d+ diagram/)
+  const json = JSON.parse(cli(f.wiki, '--repo', f.repo, '--page', '01-getting-started/usage.md', '--json').stdout)
+  assert.ok(!('pageLines' in json))
+})

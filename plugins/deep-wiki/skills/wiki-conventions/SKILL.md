@@ -55,10 +55,11 @@ Special forms:
 - **After every Mermaid diagram**: `<!-- Sources: src/a.ts:42, src/b.ts:10 -->` on one line. These are checked like any other citation.
 - **Above a quoted code snippet**: `<!-- Source: src/a.ts:42-58 -->`.
 - **Tables listing code artifacts** (components, APIs, config keys) include a `Source` column.
-- **Inside a table**, a linked citation shows the file name and lines only, with the full path in the URL: `[a.ts:42-58](REPO_URL/blob/BRANCH/src/deep/path/a.ts#L42-L58)`. A full path in a cell is one unbreakable word. `local` citations have no URL, so they keep the full path everywhere; the long-cell warning does not apply to them.
-- **Line numbers come from a file you opened**, never from a search hit or memory. A line past the end of the file is a checker error.
+- **Inside a table**, a linked citation shows the file name and lines only, with the full path in the URL: `[a.ts:42-58](REPO_URL/blob/BRANCH/src/deep/path/a.ts#L42-L58)`. A full path in a cell is one unbreakable word. When the bare name is ambiguous (`run`, `type`, `config.yaml`), show the parent folder too: `init-postgres/run:22-37`. `local` citations have no URL, so they keep the full path everywhere; the long-cell warning does not apply to them.
+- **Line numbers come from the file's own content**: a read of the file, or a numbered listing or search run on that file. Never from memory or from another document. A large file may be read in the ranges you cite. A line past the end of the file is a checker error.
+- **An empty file** is cited with the linked form without a line anchor.
 - **Never link to a source file with a relative path** (`../../src/a.ts`). Any relative link that leaves `wiki/` is a checker error in every mode.
-- **Never link `README.md`, `AGENTS.md`, or `CLAUDE.md`**, inside or outside the wiki. They are not pages of the site, so the link would be dead; the checker reports it. Cite them like any other source file.
+- **Never point a relative or site link at `README.md`, `AGENTS.md`, or `CLAUDE.md`**, inside or outside the wiki. They are not pages of the site, so the link would be dead; the checker reports it. Citing one is fine: a citation is a link to the host (or plain text on `local`), like any other source file.
 - **Commit links** (changelogs): `REPO_URL/commit/SHA`; `local`: plain short SHA.
 
 ## 3. Evidence Standard
@@ -90,13 +91,15 @@ Syntax rules:
 - Open every diagram with exactly ```` ```mermaid ````: lowercase, nothing after it. Any other opening (`Mermaid`, `mermaid title`, `mmd`) is not a diagram to the checker or the site.
 - `<br>` in labels, never `<br/>` or `<br />`.
 - `autonumber` in every `sequenceDiagram`.
+- Never name a sequence participant after a Mermaid keyword, in any letter case: `opt`, `alt`, `else`, `loop`, `par`, `and`, `end`, `rect`, `critical`, `option`, `break`, `note`, `box`, `activate`, `deactivate`, `create`, `destroy`, `title`, `over`, `autonumber`, `participant`, `actor`. `Opt` stops the whole diagram rendering; write `Options`. A longer id that only starts with one (`Endpoint`, `Notes`) is fine.
+- Never use `end` as a flowchart node id; it closes a subgraph. Write `End` or `finish`.
 - Hex colors are 3 or 6 digits only. No light fills (light hex values or names such as `white`): use the table above.
 - No per-diagram `%%{init: ...}%%` line. The site applies the theme to every diagram.
 - Keep diagrams readable at page width: at most 6 participants in a `sequenceDiagram`, at most 8 nodes in one `LR` row (switch to `TD` or split the diagram).
 - Pick the type by content: structure → `graph`/`flowchart`; behavior → `sequenceDiagram` or `stateDiagram-v2`; data → `erDiagram`; types → `classDiagram`; decisions → `flowchart`.
 - Only draw what the code has. A repo without persistent data gets no `erDiagram`.
 
-Diagrams render in the browser. Neither the checker nor the build parses Mermaid syntax, so a syntax error shows only in `npm --prefix wiki run dev` or the built site. Balance every bracket and quote, and quote labels that contain punctuation.
+Diagrams render in the browser. Neither the checker nor the build parses Mermaid syntax: beyond the rules above, a syntax error shows only as a missing diagram in `npm --prefix wiki run dev` or the built site. Balance every bracket and quote, and quote labels that contain punctuation.
 
 ## 5. VitePress-Safe Markdown
 
@@ -110,7 +113,7 @@ Diagrams render in the browser. Neither the checker nor the build parses Mermaid
 - In a table row, write a `|` inside inline code as `\|` (`` `string \| null` ``). An unescaped one splits the cell, the code span never forms, and what it protected breaks the build.
 - Standard Markdown only; VitePress containers (`::: tip`) are allowed, custom shortcodes are not.
 - Cross-page links are relative `.md` links to a file: `[Auth](../02-architecture/auth.md#token-refresh)`, `[Architecture](./02-architecture/index.md)`. Never link a folder (`./02-architecture`, `..`): link its `index.md`. A folder link without a trailing slash is a checker error. Reference-style links (`[Auth][auth]` with `[auth]: ./auth.md`) follow the same rules and are checked the same way.
-- A link to a numbered heading uses the VitePress slug, which prefixes a leading digit with `_`: `## 7. Limits` is `#_7-limits`.
+- A heading anchor is the VitePress slug: lower case, with spaces, `_`, and other punctuation turned into `-` (`### async_run` is `#async-run`), and a leading digit prefixed with `_` (`## 7. Limits` is `#_7-limits`).
 - Catalogue pages end with a `## Related Pages` table (`Page`, `Relationship`).
 
 ## 6. Output Layout
@@ -155,9 +158,11 @@ The checker enforces these minimums per page:
 Section indexes, the landing page, `research/`, `changelog.md`, and any other file in `onboarding/` have no minimums. Two adjustments apply:
 
 - A page with `depth: crisp` in its frontmatter is held to the crisp row whatever the wiki's depth.
-- The cited-file minimum is never higher than the number of source files in the repository, so a tiny repository can still pass.
+- The cited-file minimum is never higher than the number of files in the repository outside `wiki/`, so a tiny repository can still pass.
 
-Size a full-depth catalogue page by the number of source files it covers. The checker enforces only the row above; the larger budgets are yours to meet.
+A **source file** is code, configuration, or a script the project runs. Docs, generated files, and binaries are not source files.
+
+Size a full-depth catalogue page by its relevant files: the source files its prompt names plus those you trace from them. The checker enforces only the row above; the larger budgets are yours to meet. The word figure is a target for prose, not a cap, and counts prose only: not link URLs, code, diagram source, or table cells.
 
 | Scope | Relevant files | Words | Diagrams |
 |-------|----------------|-------|----------|
@@ -203,7 +208,7 @@ Generating documentation never changes or runs the project it documents.
 
 ## 10. Scripts and the Checker
 
-The scripts need only Node 22.12 or newer, no `npm install`. Before the first script in any command, run `node --version`; if Node is missing or older than 22.12, stop and tell the user. `init-wiki.mjs` copies the scripts from the `deep-wiki:wiki-vitepress` skill's `templates/scripts/` folder (`<vitepress skill dir>` is that skill's base directory) into `wiki/scripts/`.
+The scripts need only Node 22.12 or newer, no `npm install`. Before the first script in any command, run `node --version`; if Node is missing or older than 22.12, stop and tell the user. That check and the bootstrap below belong to the orchestrating command. A dispatched subagent runs neither: its only script is the checker on its own pages. `init-wiki.mjs` copies the scripts from the `deep-wiki:wiki-vitepress` skill's `templates/scripts/` folder (`<vitepress skill dir>` is that skill's base directory) into `wiki/scripts/`.
 
 Command rules:
 
@@ -237,7 +242,7 @@ Checker options:
 
 | Option | Effect |
 |--------|--------|
-| `--page <path>` | Check one page (repeatable; path relative to `wiki/`). Links to pages the run has not written yet (catalogue pages, section indexes, landing page, onboarding) are accepted |
+| `--page <path>` | Check one page (repeatable; path relative to `wiki/`). Links to pages the run has not written yet (catalogue pages, section indexes, landing page, onboarding) are accepted. Prints one line per page with its diagram count, diagram types, and cited-file count |
 | `--pending` | Whole-wiki run before the wiki is complete: accepts links to the landing page and onboarding pages before they exist, does not require the landing page, and skips the llms checks |
 | `--catalogue-only` | Validate `catalogue.json` alone and print the real section and page counts |
 | `--site` | Only what stops or breaks the built site: frontmatter, `{{ }}`, tags, Mermaid rules, links, placeholders, and the landing page. No catalogue, citation, threshold, table, llms, or leftover checks |
@@ -254,7 +259,7 @@ Exit code 0 means no errors, 1 means errors, 2 means a bad command line or an un
 |---------|-------|---------|
 | `frontmatter`, `title-length` | error | Missing, empty, unquoted-with-YAML-syntax, invalid-YAML-in-quotes, or multi-line `title`/`description`; a script artefact; title over 60 characters |
 | `interpolation`, `bare-tag` | error | `{{ }}` or tag-shaped text outside code, in prose or frontmatter |
-| `mermaid` | error | `<br/>`, `sequenceDiagram` without `autonumber`, bad hex length, light fill, empty diagram |
+| `mermaid` | error | `<br/>`, `sequenceDiagram` without `autonumber`, a keyword as a sequence participant id, `end` as a flowchart node id, a fence not opened with exactly `mermaid`, bad hex length, light fill, empty diagram |
 | `mermaid` | warn | `%%{init}%%`, more than 6 sequence participants |
 | `mermaid-sources` | warn | Diagram not followed by `<!-- Sources: ... -->` |
 | `citation` | error | Cited file not in the repository, wrong letter case, line past the end of the file |

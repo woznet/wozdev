@@ -83,7 +83,7 @@ npm --prefix wiki install
 npm --prefix wiki run build
 ```
 
-Requires Node 22.12 or newer (Mermaid 12). The build runs `check-wiki.mjs . --site` and then `vitepress build`; the output goes to `wiki/.vitepress/dist/`. Preview with `npm --prefix wiki run preview`, and look at a few diagrams: Mermaid syntax errors appear only in the browser. When the calling workflow says "no build" (crisp), skip this step and say so in the report.
+Requires Node 22.12 or newer (Mermaid 12). The build runs `check-wiki.mjs . --site` and then `vitepress build`; the output goes to `wiki/.vitepress/dist/`. Then preview with `npm --prefix wiki run preview`. This is not optional for diagrams: the checker and the build cannot detect a Mermaid syntax error, which shows only as an empty diagram box in the browser. Tell the user to open the preview and look for diagrams that did not render. When the calling workflow says "no build" (crisp), skip this step and say so in the report.
 
 `wiki/package.json` scripts: `dev`, `build`, `preview`, `check` (all checks), `indexes` (generated indexes), `llms` (llms files).
 

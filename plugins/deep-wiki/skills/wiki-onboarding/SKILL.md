@@ -35,6 +35,7 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. Its citation form
 | Evidence | Read the code before writing. Cite per the conventions. |
 | Diagrams | Each guide's section list marks its diagram slots with **[D]**; filling them meets the checker minimum. Draw only what the code has: when a slot's subject does not exist (no data model, no external dependency), use the fallback the slot names, and never draw a diagram of nothing. |
 | Commands | Show expected output only where the repository documents it; never invent output. |
+| Tables | At most 5 columns. When a table's listed columns already fill five, cite inside the cells instead of adding a `Source` column. Drop a listed column whose facts the repository does not hold at all (for example `Install command`, `What it replaced`) and name that gap once under open questions; do not fill a column with `Not determinable` in every row. |
 | Unknowns | See "Facts the Repository Cannot Supply". |
 
 The checker enforces the minimums in conventions section 7 at the depth recorded in `wiki/.deep-wiki.json`. Budgets and crisp scope per guide:
@@ -46,7 +47,7 @@ The checker enforces the minimums in conventions section 7 at the depth recorded
 | Executive | 1,500–3,000 | 500–1,000 | Sections 1–3, 6, 12 (diagram in 3) |
 | Product manager | 1,500–3,000 | 500–1,000 | Sections 1–3, 8 (diagram in 2) |
 
-At crisp depth, only the diagram slots named in the last column are required; the **[D]** slots of other kept sections are optional. Budgets are ceilings on padding, not targets to fill: stop when the sections are covered.
+At crisp depth, only the diagram slots named in the last column are required; the **[D]** slots of other kept sections are optional. Budgets count prose (conventions section 7) and are ceilings on padding, not targets to fill: stop when the sections are covered. Table rows do not count, but a guide far over its range is usually carrying too many of them: cut rows that repeat a catalogue page and link to that page instead.
 
 ## Facts the Repository Cannot Supply
 
@@ -54,7 +55,7 @@ Owners, bus factor, current metric values, SLAs, rate limits, costs, roadmap, an
 
 ## Contributor Guide
 
-Progressive: each section builds on the last. Code examples are in the repository's primary language (detect it from the manifests).
+Progressive: each section builds on the last. Code examples are in the repository's primary language: the one with the most project code when several are mixed. Where a section names the primary framework and the project has none, use the platform it runs on.
 
 **Part I: Foundations** (skip when the repository is Python or JavaScript/TypeScript)
 
@@ -103,7 +104,7 @@ Dense and opinionated. Explain why each decision was made, not only what exists.
 
 ## Executive Guide
 
-Strategic and decision-oriented. No code snippets. Diagrams at the level of services and teams, never classes or functions. Translate technical facts into reliability, velocity, cost, and risk. One table per structured finding.
+Strategic and decision-oriented. No code blocks; an option or event name may appear as inline code. Diagrams at the level of services and teams, never classes or functions. Translate technical facts into reliability, velocity, cost, and risk. One table per structured finding.
 
 1. **System overview**: what it does, who uses it, its value. **[D]** a `sequenceDiagram` of one end-to-end interaction between the user, the system, and the services it depends on.
 2. **Capability map**: `Capability | Status (Built/Partial/Planned) | Maturity | Dependencies`.
@@ -120,7 +121,7 @@ Strategic and decision-oriented. No code snippets. Diagrams at the level of serv
 
 ## Product Manager Guide
 
-User-centric. No engineering jargon; when a technical term is unavoidable, explain it in one sentence. Describe what users experience, not how the code works. One table per structured finding.
+User-centric. No code blocks and no engineering jargon; a setting, option, or event name the user sees may appear as inline code, and when a technical term is unavoidable, explain it in one sentence. Describe what users experience, not how the code works. One table per structured finding.
 
 1. **What this system does**: two or three sentences in user-facing language.
 2. **User journey map**: **[D]** a `flowchart` or `journey` diagram of the main flow.
@@ -137,4 +138,4 @@ User-centric. No engineering jargon; when a technical term is unavoidable, expla
 ## Validation
 
 1. Run `node wiki/scripts/check-wiki.mjs wiki --page onboarding/<guide>.md` when the script exists. Fix every error and rerun, at most three passes; then report what remains. Do not run any generator from a dispatched writer.
-2. Confirm by reading: every named class, function, and path exists; the executive and PM guides contain no code; every `Not determinable from the repository` cell is listed under "Open questions for the team".
+2. Confirm by reading: every named class, function, and path exists; the executive and PM guides contain no code blocks; every `Not determinable from the repository` cell is listed under "Open questions for the team".

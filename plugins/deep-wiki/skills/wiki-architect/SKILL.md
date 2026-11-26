@@ -24,7 +24,7 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 
 ## Procedure
 
-1. **Scan** the file tree (skip `node_modules/`, `dist/`, `.git/`, vendored code, and `wiki/` itself) and read the README.
+1. **Scan** the file tree (skip `node_modules/`, `dist/`, `.git/`, vendored code, and `wiki/` itself) and read the README. Treat agent tooling folders (`.claude/`, `.cursor/`, `.github/skills/`) as vendored, and archived or forward-looking design docs as out of scope; name both in your report.
 2. **Detect** languages (from extensions and manifests: `package.json`, `pyproject.toml`, `*.csproj`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.psd1`, `Dockerfile`, …), frameworks, entry points, build and CI configuration, and key technologies (datastores, messaging, protocols).
 3. **Identify** the natural decomposition: layers, modules, services, and their boundaries. Read enough code to confirm each boundary instead of trusting folder names.
 4. **Write** the catalogue to `wiki/catalogue.json` (create `wiki/` if needed) using the schema below.
@@ -63,19 +63,19 @@ Load `deep-wiki:wiki-conventions` if it is not already loaded. It defines reposi
 | `dir` | Section nodes only: the folder relative to `wiki/`. Top level is `NN-slug`, numbered in reading order; a nested section is `NN-slug/sub-slug`. No `..` segments, and no folder named `dist` or `node_modules` |
 | `description` | Section nodes only: one sentence on what the section covers, with no `<`, `>`, `{{`, or `}}`. It becomes the introduction of the section's generated `index.md` |
 | `path` | Page nodes only: the page file relative to `wiki/`, inside its parent section's `dir`. Every segment is kebab-case (`02-architecture/request-flow.md`): no spaces, capitals, or `..` |
-| `prompt` | Page nodes only: 1–3 sentences naming the files the writer must read and what to explain. Name files and symbols by their real paths. Add a line range only for a file you opened and read; never take line numbers from search output |
+| `prompt` | Page nodes only: 1–3 sentences naming the files the writer must read and what to explain. Name files and symbols by their real paths and names; a symbol name may come from a listing of the file's definitions. Add a line range only for a file you opened and read |
 | `minFiles` | Page nodes only, optional: an integer from 2 to 4. Set it only when the topic genuinely has fewer than 5 source files; it lowers that page's citation minimum |
 | `children` | Empty array for pages; at least one node for sections |
 
 ## Structure Rules
 
-- Top-level sections in order: **Getting Started** (overview, setup, usage, quick reference), then **Deep Dive** sections (architecture → subsystems → components → key interfaces). Onboarding guides are not catalogue nodes; `deep-wiki:wiki-onboarding` writes them to `wiki/onboarding/`.
+- Top-level sections in order: **Getting Started** (for example overview, setup, usage, quick reference; write the ones the repository needs: several independent apps get an overview plus one setup page each), then **Deep Dive** sections (architecture → subsystems → components → key interfaces). Onboarding guides are not catalogue nodes; `deep-wiki:wiki-onboarding` writes them to `wiki/onboarding/`.
 - Max depth 4; max 8 children per node.
 - A node has `dir` or `path`, never both. Never add an `index.md` page: section indexes are generated from the catalogue.
 - `name`, `description`, and `prompt` are each a single line: no line breaks inside the string.
 - Every page `prompt` names at least 5 real files (the writer must cite 5), or the page sets `minFiles`. Never reference a file you have not seen in the scan.
-- Small repos (≤ 10 source files): Getting Started only, with 1–3 pages, each with `minFiles` as needed. The checker never asks a page to cite more files than the repository has.
-- Split a page when its prompt would need more than ~15 files; merge pages that would cite the same handful of files.
+- Small repos (≤ 10 source files, as conventions section 7 defines them): Getting Started only, with 1–3 pages, each with `minFiles` as needed. The checker never asks a page to cite more files than the repository has.
+- Split a page when its prompt would need more than ~15 files; merge pages that would cite the same handful of files. Exception: one very large file (thousands of lines) may be split across pages by route group or responsibility, even though those pages cite the same supporting files.
 - Describe what the code does now. Check each term in a `name` or `prompt` against the current source, not against a README, comment, or commit message that may be out of date.
 
 ## Output
