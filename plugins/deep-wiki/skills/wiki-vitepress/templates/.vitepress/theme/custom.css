@@ -35,14 +35,26 @@
    The extra .Layout ancestor outranks the default theme's scoped rules of the same shape. */
 @media (min-width: 960px) {
   :root {
-    /* Default 272px, of which 64px was padding. Narrower panel, wider labels. */
-    --vp-sidebar-width: 248px;
+    /* Default 272px, of which 64px was padding. Smaller insets give the labels the room. */
+    --vp-sidebar-width: 280px;
   }
   /* Sidebar and the site title above it: pinned to the left edge with a 16px inset. */
   .Layout .VPSidebar {
     width: var(--vp-sidebar-width);
     padding-left: 16px;
     padding-right: 12px;
+    /* The default panel starts at the top of the window and pads itself past the nav bar,
+       so its scrollbar ran up through the site title. Start it below the nav bar instead. */
+    top: calc(var(--vp-layout-top-height, 0px) + var(--vp-nav-height));
+    bottom: 0;
+    height: auto;
+    padding-top: 0;
+    scrollbar-width: thin;
+    scrollbar-color: #30363d transparent;
+  }
+  /* The curtain only hid items scrolling under the title; nothing scrolls there now. */
+  .Layout .VPSidebar .curtain {
+    display: none;
   }
   .Layout .VPNavBar.has-sidebar .title {
     width: var(--vp-sidebar-width);
