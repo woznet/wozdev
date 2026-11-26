@@ -233,15 +233,6 @@ export default withMermaid(
     appearance: 'force-dark',
     head: [
       ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
-      ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
-      ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
-      [
-        'link',
-        {
-          rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap',
-        },
-      ],
     ],
     markdown: {
       theme: { light: 'github-dark', dark: 'github-dark' },
@@ -253,6 +244,18 @@ export default withMermaid(
         md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
           tokens[idx].attrSet('v-pre', '')
           return inline(tokens, idx, options, env, self)
+        }
+        // A link to a file in the source repository is a citation. Pages carry hundreds of
+        // them, so the theme sets them quieter than links that take the reader somewhere
+        // in the wiki. Mark them here; the look is in custom.css (.cite).
+        const sourceLink = /\/blob\/|[?&]path=/
+        const linkOpen = md.renderer.rules.link_open
+        md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+          const href = tokens[idx].attrGet('href') ?? ''
+          if (REPO_URL && href.toLowerCase().startsWith(REPO_URL.toLowerCase()) && sourceLink.test(href)) {
+            tokens[idx].attrJoin('class', 'cite')
+          }
+          return linkOpen ? linkOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
         }
       },
     },
@@ -282,7 +285,7 @@ export default withMermaid(
       themeVariables: {
         darkMode: true,
         background: '#0d1117',
-        fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+        fontFamily: '"Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif',
         primaryColor: '#2d333b',
         primaryTextColor: '#e6edf3',
         primaryBorderColor: '#6d5dfc',

@@ -3,8 +3,14 @@
 /* ---------- Palette and typography ---------- */
 :root,
 .dark {
-  --vp-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  /* Atkinson Hyperlegible, sans and mono from one design. It was drawn so that similar
+     characters cannot be mistaken (I l 1, O 0, rn m), which is what a page full of
+     identifiers, file names, and line numbers needs. The shared design also keeps the
+     texture even where prose and inline code alternate every few words. */
+  --vp-font-family-base: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', ui-sans-serif,
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'Atkinson Hyperlegible Mono Variable', 'Atkinson Hyperlegible Mono', ui-monospace,
+    SFMono-Regular, Consolas, monospace;
 
   --vp-c-bg: #0d1117;
   --vp-c-bg-alt: #161b22;
@@ -22,9 +28,73 @@
   --vp-c-brand-soft: rgba(109, 93, 252, 0.16);
   --vp-code-block-bg: #161b22;
   --vp-code-bg: rgba(110, 118, 129, 0.2);
-  --vp-code-color: #b8aeff;
+  /* Neutral, so the accent colour means one thing on a page: a link. */
+  --vp-code-color: #d0d7de;
   --vp-sidebar-bg-color: #0d1117;
   --vp-nav-bg-color: #0d1117;
+}
+
+/* ---------- Type scale ---------- */
+/* 16 / 18 / 21 / 24 / 36: the classical scale, so each heading level is told apart by size
+   alone and weight can stay moderate. Large windows get a slightly larger base, since the
+   text column there is wide. */
+html {
+  scroll-padding-top: calc(var(--vp-nav-height) + 16px);
+}
+@media (min-width: 1680px) {
+  .vp-doc {
+    font-size: 17px;
+  }
+}
+.vp-doc {
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+.vp-doc h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.vp-doc h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  margin-top: 2.6em;
+  padding-top: 1.1em;
+}
+.vp-doc h3 {
+  font-size: 1.3125rem;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-top: 2em;
+}
+.vp-doc h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.vp-doc :not(pre) > code {
+  font-size: 0.9em;
+  font-weight: 450;
+}
+::selection {
+  background: rgba(109, 93, 252, 0.35);
+}
+/* One focus ring for every control and link, visible on the dark background. */
+:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ---------- Layout and content ---------- */
@@ -120,9 +190,9 @@
 }
 .VPSidebarItem.level-0 > .item > .text,
 .VPSidebarItem.level-0 > .item > .link > .text {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.8em;
+  /* Section names read as headings through weight and colour, in the case they were written. */
+  font-weight: 650;
+  color: var(--vp-c-text-1);
   /* A section label is a name. If a long one slips through, cap it at two lines. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -142,9 +212,52 @@
   border-radius: 1px;
   background: var(--vp-c-brand-2);
 }
+/* Two kinds of link, told apart at a glance.
+   - A link to another page or site: accent colour, underlined.
+   - A source citation (.cite, set in config.mts): a page has hundreds, so they are quiet.
+     Monospace and muted, with a faint underline; the accent appears on hover or focus.
+     The external-link arrow is dropped: every citation leaves the site, so it says nothing. */
 .vp-doc a {
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(139, 125, 255, 0.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.vp-doc a:hover {
+  color: #a79dff;
+  text-decoration-color: currentColor;
+}
+.vp-doc a.cite {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.86em;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
+  text-decoration-style: dotted;
+  text-decoration-color: #4a5462;
+  white-space: normal;
+}
+.vp-doc a.cite:hover,
+.vp-doc a.cite:focus-visible {
+  color: var(--vp-c-brand-1);
+  text-decoration-style: solid;
+  text-decoration-color: currentColor;
+}
+.vp-doc a.cite::after,
+.vp-doc a.cite .vp-external-link-icon {
+  display: none !important;
+}
+/* The heading anchor is a control, not a citation or a text link. */
+.vp-doc a.header-anchor {
   text-decoration: none;
-  border-bottom: 1px dotted var(--vp-c-brand-2);
+  color: var(--vp-c-text-3);
+}
+.vp-doc a.header-anchor:hover,
+.vp-doc a.header-anchor:focus-visible {
+  color: var(--vp-c-brand-1);
+  opacity: 1;
 }
 .vp-doc blockquote {
   border-left: 3px solid #6d5dfc;
@@ -185,10 +298,20 @@
 .vp-doc th {
   background: #161b22;
   color: var(--vp-c-text-1);
-  text-transform: uppercase;
-  font-size: 0.8em;
-  letter-spacing: 0.03em;
+  font-size: 0.92em;
+  font-weight: 650;
+  text-align: left;
   white-space: nowrap;
+}
+/* A long table keeps its column names in view while it scrolls past. Only where the table
+   is a real table box (960px up); a block table scrolls inside its own box instead. */
+@media (min-width: 960px) {
+  .vp-doc thead th {
+    position: sticky;
+    top: var(--vp-nav-height);
+    z-index: 1;
+    box-shadow: 0 1px 0 var(--vp-c-divider);
+  }
 }
 .vp-doc tr:nth-child(2n) {
   background: rgba(22, 27, 34, 0.6);
@@ -388,4 +511,20 @@
     max-width: 1000px !important;
     margin: 0 auto !important;
   }
+}
+
+/* ---------- Page outline ---------- */
+/* Heading names in a wiki are long. Let an entry wrap to two lines before it is cut,
+   so the outline says where it leads. */
+.VPDocAsideOutline .outline-link {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
+  padding: 4px 0;
+}
+.VPDocAsideOutline .outline-link.active {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
 }

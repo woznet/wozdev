@@ -2,6 +2,9 @@ import DefaultTheme from 'vitepress/theme'
 import { onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vitepress'
 import mediumZoom, { type Zoom } from 'medium-zoom'
+// Fonts ship with the site: no request to a font service, and the wiki works offline.
+import '@fontsource-variable/atkinson-hyperlegible-next'
+import '@fontsource-variable/atkinson-hyperlegible-mono'
 import './custom.css'
 
 // All DOM work runs from setup() hooks, never enhanceApp(): enhanceApp also runs
