@@ -410,3 +410,49 @@ export function countSourceFiles(repoRoot, wikiDir, limit = 5) {
   visit(repoRoot)
   return count
 }
+
+// ---------------------------------------------------------------------------
+// Markdown links, shared by the checker and gen-llms so both see the same links
+// ---------------------------------------------------------------------------
+const LINK_TITLE = String.raw`(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?`
+const INLINE_LINK = new RegExp(
+  String.raw`(!?)\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s<>]|\([^()\s]*\))+))${LINK_TITLE}\s*\)`,
+  'dg',
+)
+// CommonMark link reference definition: "[label]: target", an optional title, then the end of the line.
+// "[Note]: a sentence" is not one, and a label starting with ^ is a footnote.
+const LINK_DEFINITION = new RegExp(String.raw`^ {0,3}\[(?!\^)([^\]\n]+)\]:\s*(?:<([^<>\n]*)>|(\S+))${LINK_TITLE}\s*$`, 'd')
+
+/** A reference label as Markdown compares it: case-folded, whitespace collapsed. */
+export const linkLabel = (label) => String(label).trim().replace(/\s+/g, ' ').toLowerCase()
+
+/**
+ * Inline links and images on one line: `[text](url)`, with one level of [brackets] in the text,
+ * one level of (parentheses) in the URL, an optional `<...>` wrapper and an optional title.
+ * Each has `{ index, length, isImage, label, url, labelSpan, urlSpan }`; the spans are [start, end).
+ * Pass a line whose inline code is already blanked if code must not match.
+ */
+export function inlineLinks(line) {
+  const out = []
+  for (const m of line.matchAll(INLINE_LINK)) {
+    const group = m[3] !== undefined ? 3 : 4
+    out.push({ index: m.index, length: m[0].length, isImage: m[1] === '!', label: m[2], url: m[group], labelSpan: m.indices[2], urlSpan: m.indices[group] })
+  }
+  return out
+}
+
+/** The link reference definition on this line as `{ label, url, urlSpan }`, or null. */
+export function linkDefinition(line) {
+  const m = line.match(LINK_DEFINITION)
+  if (!m) return null
+  const group = m[2] !== undefined ? 2 : 3
+  return { label: linkLabel(m[1]), url: m[group], urlSpan: m.indices[group] }
+}
+
+/** Labels this line refers to: `[text][label]`, `[label][]`, and the shortcut `[label]`. */
+export function linkReferences(line) {
+  const out = []
+  for (const m of line.matchAll(/\[((?:[^[\]]|\[[^[\]]*\])*)\]\[([^\]\n]*)\]/g)) out.push(linkLabel(m[2] || m[1]))
+  for (const m of line.matchAll(/\[([^[\]\n]+)\](?![[(:])/g)) out.push(linkLabel(m[1]))
+  return out
+}

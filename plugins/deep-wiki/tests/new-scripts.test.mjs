@@ -210,6 +210,43 @@ test('llms-full rebases links from a nested page and leaves code alone', (t) => 
   assert.doesNotMatch(routes, /\.md\)/)
 })
 
+test('llms-full rebases reference definitions and titled links like plain links', (t) => {
+  const files = wikiFiles()
+  files['wiki/01-core/alpha.md'] += [
+    '',
+    'See [Flow][flow], [Home][], and [quoted](./beta.md \'Beta\') or [paren](<./beta.md> (Beta)).',
+    '',
+    '[flow]: ./beta.md#usage',
+    '[home]: ../index.md "Home"',
+    '[Note]: unused',
+    '',
+  ].join('\n')
+  const dir = repo(t, files)
+  const wiki = path.join(dir, 'wiki')
+  init(dir, { base: '/repo/' })
+  genLlms({ wikiDir: wiki, repo: dir })
+  const full = read(wiki, 'llms-full.txt')
+  assert.match(full, /^\[flow\]: \.\/01-core\/beta\.md#usage$/m)
+  assert.match(full, /^\[home\]: \.\/index\.md "Home"$/m)
+  assert.match(full, /^\[Note\]: unused$/m)
+  assert.match(full, /\[quoted\]\(\.\/01-core\/beta\.md 'Beta'\)/)
+  assert.match(full, /\[paren\]\(<\.\/01-core\/beta\.md> \(Beta\)\)/)
+  const site = read(wiki, 'public/llms-full.txt')
+  assert.match(site, /^\[flow\]: \/repo\/01-core\/beta#usage$/m)
+  assert.match(site, /^\[home\]: \/repo\/ "Home"$/m)
+  assert.match(site, /^\[Note\]: unused$/m)
+  assert.match(site, /\[quoted\]\(\/repo\/01-core\/beta 'Beta'\)/)
+  assert.match(site, /\[paren\]\(<\/repo\/01-core\/beta> \(Beta\)\)/)
+  assert.deepEqual(llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false })), [])
+
+  // The checker sees the same links: a stale definition in either copy is reported.
+  fs.appendFileSync(path.join(wiki, 'llms-full.txt'), '\nSee [gone][g].\n\n[g]: ./01-core/gone.md\n')
+  fs.appendFileSync(path.join(wiki, 'public/llms-full.txt'), '\nSee [raw][r].\n\n[r]: ./01-core/beta.md\n')
+  const stale = llmsFindings(checkWiki({ wikiDir: wiki, repo: dir, source: false }))
+  assert.ok(stale.some((f) => f.file === 'llms-full.txt' && /gone\.md, which does not exist/.test(f.message)), JSON.stringify(stale))
+  assert.ok(stale.some((f) => f.file === 'public/llms-full.txt' && /beta\.md/.test(f.message)), JSON.stringify(stale))
+})
+
 test('a link to a repo file loses its link in the deployed copy when the host is unknown', (t) => {
   const dir = repo(t, wikiFiles())
   const wiki = path.join(dir, 'wiki')

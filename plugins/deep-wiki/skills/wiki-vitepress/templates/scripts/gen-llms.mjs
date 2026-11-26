@@ -43,14 +43,14 @@ import {
   resolveDir,
   resolveRepoRoot,
   resolveSite,
+  inlineLinks,
+  linkDefinition,
+  linkReferences,
 } from './lib.mjs'
 
 const MAX_BYTES = 5 * 1024
 const DEFAULT_INPUT = '.deep-wiki-llms.json'
 const INLINE_CODE = /(`+)(?:(?!\1).)+\1/g
-// Same shape the checker accepts: one level of [brackets] in the text, one level of (parentheses) in the URL.
-// The `d` flag gives the position of each group, so a link is rewritten without touching its label.
-const LINK = /(!?)\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*<?((?:[^()\s<>]|\([^()\s]*\))+)>?((?:\s+"[^"]*")?)\s*\)/dg
 // Headings this script adds itself, with the name each falls back to when a catalogue section already uses it.
 const BUILT_IN_FALLBACK = { 'Start Here': 'Landing Page', Onboarding: 'Onboarding Guides', More: 'Other Pages' }
 
@@ -365,18 +365,27 @@ export function genLlms(options) {
     return hostLink(inRepo(plain))
   }
   /** Rewrite the links of one line. Code spans are masked for matching, so a link whose label holds code is still found. */
-  const rebaseLine = (line, pageRel, variant) => {
+  const rebaseLine = (line, pageRel, variant, referenced) => {
     const masked = line.replace(INLINE_CODE, (m) => ' '.repeat(m.length))
     let out = ''
     let last = 0
-    for (const m of masked.matchAll(LINK)) {
-      const next = rewrite(m[3], pageRel, variant)
-      if (next === m[3]) continue
-      const [labelStart, labelEnd] = m.indices[2]
-      const [urlStart, urlEnd] = m.indices[3]
+    // A "[ref]: target" definition that the page uses is rewritten like a link; one whose target cannot be
+    // linked is dropped. An unused one ("[Note]: text") is ordinary text to the reader and stays as it is.
+    const def = linkDefinition(masked)
+    if (def && !referenced.has(def.label)) return line
+    if (def) {
+      const next = rewrite(def.url, pageRel, variant)
+      if (next === null) return ''
+      return next === def.url ? line : line.slice(0, def.urlSpan[0]) + next + line.slice(def.urlSpan[1])
+    }
+    for (const link of inlineLinks(masked)) {
+      const next = rewrite(link.url, pageRel, variant)
+      if (next === link.url) continue
+      const [labelStart, labelEnd] = link.labelSpan
+      const [urlStart, urlEnd] = link.urlSpan
       if (next === null) {
-        out += line.slice(last, m.index) + line.slice(labelStart, labelEnd)
-        last = m.index + m[0].length
+        out += line.slice(last, link.index) + line.slice(labelStart, labelEnd)
+        last = link.index + link.length
       } else {
         out += line.slice(last, urlStart) + next
         last = urlEnd
@@ -385,9 +394,10 @@ export function genLlms(options) {
     return out + line.slice(last)
   }
   const rebase = (body, pageRel, variant) => {
-    const out = []
-    for (const { line, code } of bodyLines(body)) out.push(code ? line : rebaseLine(line, pageRel, variant))
-    return out.join('\n')
+    const lines = [...bodyLines(body)]
+    const mask = (line) => line.replace(INLINE_CODE, (m) => ' '.repeat(m.length))
+    const referenced = new Set(lines.flatMap(({ line, code }) => (code ? [] : linkReferences(mask(line)))))
+    return lines.map(({ line, code }) => (code ? line : rebaseLine(line, pageRel, variant, referenced))).join('\n')
   }
   const renderFull = (variant) => {
     const lines = [...header]

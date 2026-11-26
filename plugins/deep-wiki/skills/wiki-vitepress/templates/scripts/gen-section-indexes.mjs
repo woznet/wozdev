@@ -127,6 +127,8 @@ export function genIndexes(options) {
     for (const child of children) {
       if (typeof child.path === 'string') {
         const childPath = child.path.replace(/\\/g, '/')
+        // A page the catalogue plans but nobody has written yet: no row, so the index has no dead link.
+        if (!fs.existsSync(path.join(wikiDir, childPath))) continue
         const fm = frontmatterOf(childPath)
         rows.push(`| [${linkText(fm.title || child.name)}](${relLink(dir, childPath)}) | ${cell(fm.description)} |`)
       } else if (typeof child.dir === 'string') {

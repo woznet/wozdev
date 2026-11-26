@@ -60,7 +60,7 @@ Run every command from the repository root, in the forms conventions section 10 
 
 ## Step 3: Onboarding
 
-1. Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, each with the onboarding task form (conventions section 11): load `deep-wiki:wiki-onboarding` and write `wiki/onboarding/<guide>.md`. The four guides are `contributor-guide.md`, `staff-engineer-guide.md`, `executive-guide.md`, and `product-manager-guide.md`. In `fill-missing`, only the missing ones. With a focus, skip this step if the guides exist.
+1. Dispatch one `deep-wiki:wiki-writer` per guide, in parallel, each with the onboarding task form (conventions section 11): load `deep-wiki:wiki-onboarding` and write `wiki/onboarding/<guide>.md`. The four guides are `contributor-guide.md`, `staff-engineer-guide.md`, `executive-guide.md`, and `product-manager-guide.md`. In `fill-missing`, only the missing ones. With a focus, write guides only when `wiki/onboarding/` holds no guide at all; otherwise skip this step and list any missing guides in the report.
 2. Run `node wiki/scripts/gen-section-indexes.mjs wiki` again (with `--force` in `regenerate`). It writes `onboarding/index.md` and refreshes the section indexes after the Step 2 repairs. Never write the hub by hand.
 
 ## Step 4: Site

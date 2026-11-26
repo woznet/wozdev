@@ -18,7 +18,7 @@ Load `deep-wiki:wiki-conventions`, `deep-wiki:wiki-page-writer`, and `deep-wiki:
      - The write mode is `regenerate`; on a fresh repository it is `fill-missing`.
      - List by exact path: every page under `wiki/NN-*/`, `wiki/catalogue.json`, `wiki/index.md`, and the onboarding guides other than `contributor-guide.md` (this run rewrites that one). `wiki/research/` and `wiki/changelog.md` are kept. Ask to delete the listed paths. If the user declines, stop.
      - Delete `wiki/catalogue.json` now, so the page checks in Phase 2 treat unwritten siblings as pending. Delete the rest after Phase 2, skipping any path this run wrote.
-3. Resolve `REPO_URL`, `HOST`, and `BRANCH`, then run the bootstrap command from conventions section 10, which says which flags to pass. First run: all four, with `--depth crisp`. Replacing a wiki: `--scripts-only --depth crisp`.
+3. Resolve `REPO_URL`, `HOST`, and `BRANCH`, then run the bootstrap command from conventions section 10, which says which flags to pass. Crisp always records depth `crisp`: with no `wiki/.deep-wiki.json`, pass all four flags with `--depth crisp`; when the file exists (replacing a wiki, or a wiki that so far holds only guides, research, or a changelog), pass `--scripts-only --depth crisp`.
 4. Scan once. List the tree to depth 3 (skip `node_modules/`, `.git/`, `dist/`, `wiki/`), then read the README, the manifests, and at most 10–15 key source files (entry points, main config, 2–3 core modules). Batch the reads and don't re-read files.
 
 ## Phase 2: Pages and Onboarding (parallel)

@@ -243,3 +243,13 @@ test('bad input exits 2 without writing', (t) => {
   assert.equal(generate(path.join(dir, 'missing')).code, 2)
   assert.equal(generate(dir, '--frce').code, 2)
 })
+
+test('a catalogue page nobody has written yet gets no row, so the index has no dead link', (t) => {
+  const dir = wiki(t, { '01-core/cache.md': page('Cache', 'How the cache works.') }, { project: 'P', summary: 'S', items: [SECTION] })
+  assert.equal(generate(dir).code, 0)
+  const index = read(dir, '01-core/index.md')
+  assert.match(index, /\(\.\/cache\.md\)/)
+  assert.doesNotMatch(index, /auth\.md/)
+  const result = checkWiki({ wikiDir: dir, site: true, source: false })
+  assert.deepEqual(result.errors.filter((f) => f.rule === 'link'), [])
+})

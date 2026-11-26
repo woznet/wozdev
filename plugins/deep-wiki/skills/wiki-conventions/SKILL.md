@@ -222,7 +222,7 @@ node "<vitepress skill dir>/templates/scripts/init-wiki.mjs" wiki --scripts-only
 | Situation | Flags |
 |-----------|-------|
 | No `wiki/.deep-wiki.json` yet (first run) | All four (leave out `--branch` when there is none). Depth is `crisp` only for `/deep-wiki:crisp` and `/deep-wiki:page --crisp`; `full` for every other command |
-| `wiki/.deep-wiki.json` exists | `--scripts-only` alone, plus only the flags whose value you mean to change. The recorded depth changes in two cases only: `/deep-wiki:generate` without a focus passes `--depth full`, and `/deep-wiki:crisp` replacing a wiki passes `--depth crisp`. Every other command, and `generate` with a focus, leaves it alone |
+| `wiki/.deep-wiki.json` exists | `--scripts-only` alone, plus only the flags whose value you mean to change. The recorded depth changes in two cases only: `/deep-wiki:generate` without a focus passes `--depth full`, and `/deep-wiki:crisp` always passes `--depth crisp`. Every other command, and `generate` with a focus, leaves it alone |
 
 | Command | Use |
 |---------|-----|
@@ -240,7 +240,7 @@ Checker options:
 | `--page <path>` | Check one page (repeatable; path relative to `wiki/`). Links to pages the run has not written yet (catalogue pages, section indexes, landing page, onboarding) are accepted |
 | `--pending` | Whole-wiki run before the wiki is complete: accepts links to the landing page and onboarding pages before they exist, does not require the landing page, and skips the llms checks |
 | `--catalogue-only` | Validate `catalogue.json` alone and print the real section and page counts |
-| `--site` | Only what affects the rendered site: frontmatter, `{{ }}`, tags, Mermaid rules, links, placeholders, and the landing page. No catalogue, citation, threshold, or llms checks |
+| `--site` | Only what stops or breaks the built site: frontmatter, `{{ }}`, tags, Mermaid rules, links, placeholders, and the landing page. No catalogue, citation, threshold, table, llms, or leftover checks |
 | `--report` | Print a `Section \| Pages \| Diagrams \| Cited files` table |
 | `--json` | Machine-readable output (`errors`, `warnings`, `stats`, `pages`, `report`) |
 | `--write-baseline <file>` / `--baseline <file>` | Save `git status` before a run; afterwards report files that appeared or changed |
@@ -262,6 +262,7 @@ Exit code 0 means no errors, 1 means errors, 2 means a bad command line or an un
 | `link` | error | Broken relative link (inline or reference-style); folder link without a trailing slash; relative link that leaves the wiki; link to `README.md`, `AGENTS.md`, or `CLAUDE.md`; any other `link` finding not listed as a warning below |
 | `link` | warn | In `--page` mode without a catalogue, a sibling page that is not written yet; a non-image file inside the wiki that the site will not publish |
 | `anchor` | warn | `#anchor` with no matching heading |
+| `table` | error | A `\|` inside inline code in a table row (write `\\|`); not reported under `--site` |
 | `table` | warn | More than 5 columns; unbreakable cell text over 60 characters |
 | `catalogue` | error | Schema problem in `catalogue.json` (schema: `deep-wiki:wiki-architect`) |
 | `catalogue-drift`, `missing`, `landing` | error | Catalogue page never written; requested page absent; no `wiki/index.md` |

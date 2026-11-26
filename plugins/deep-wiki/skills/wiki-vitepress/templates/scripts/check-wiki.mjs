@@ -11,7 +11,8 @@
 //                           landing page, and skips the llms checks
 //   --site                  only the checks that affect the rendered site (used by `npm run build`):
 //                           frontmatter, {{ }}, tags, Mermaid rules, links, placeholders, landing page.
-//                           No catalogue, citation, threshold, table, llms, or leftover checks.
+//                           No catalogue, citation, threshold, table, llms, or leftover checks: the
+//                           build is never stopped by something VitePress itself would render.
 //   --catalogue-only        validate catalogue.json alone (before any page exists)
 //   --repo <path>           source repository root (default: the root the state file records, else the
 //                           git top level; with neither, citations are checked against the wiki's
@@ -36,7 +37,10 @@ import {
   countSourceFiles,
   createFenceScanner,
   gitTopLevel,
+  inlineLinks,
   isMarked,
+  linkDefinition,
+  linkReferences,
   pagePathProblem,
   listPages,
   loadCatalogue,
@@ -696,8 +700,9 @@ export function checkWiki(options) {
     }
     // GFM splits a table row on every unescaped pipe, even one inside backticks: the code span
     // never forms, the cell breaks in two, and whatever the backticks were hiding reaches Vue.
+    // The site still builds (the row just renders wrongly), so this does not stop a --site run.
     for (const { n, text, table } of page.raw) {
-      if (!table) continue
+      if (!table || opts.site) continue
       for (const m of text.matchAll(INLINE_CODE)) {
         if (/(?<!\\)\|/.test(m[0])) error(rel, n, 'table', `${m[0]} has a | inside inline code in a table row, which splits the cell; escape it as \\|`)
       }
@@ -815,11 +820,6 @@ export function checkWiki(options) {
     }
 
     // links
-    // Link text may contain one level of [brackets]; the URL one level of (parentheses).
-    // The target may be wrapped in <...> (then it may hold spaces) and followed by a "title", 'title' or (title).
-    const LINK = /(!?)\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s<>]|\([^()\s]*\))+))(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)/g
-    // Reference-style: "[text][ref]" resolves through a "[ref]: target" line, which is checked where it is defined.
-    const DEFINITION = /^ {0,3}\[(?!\^)([^\]\n]+)\]:\s*(?:<([^<>\n]*)>|(\S+))/
     const handleUrl = (n, url, label, isImage) => {
       if (!url || url.startsWith('//')) return // "//host/path" is an external URL
       if (/^https?:\/\//i.test(url)) {
@@ -830,10 +830,13 @@ export function checkWiki(options) {
       if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return // mailto:, tel:, ...
       checkLink(n, url, isImage)
     }
+    // Inline links, and reference-style links through their "[ref]: target" definition (lib.mjs).
+    // A definition nothing refers to renders nothing and records no link, so only used ones are checked.
+    const referenced = new Set(page.prose.flatMap(({ text }) => linkReferences(text)))
     for (const { n, text } of page.prose) {
-      for (const m of text.matchAll(LINK)) handleUrl(n, m[3] ?? m[4], m[2], m[1] === '!')
-      const def = text.match(DEFINITION)
-      if (def) handleUrl(n, def[2] ?? def[3], def[1], false)
+      for (const link of inlineLinks(text)) handleUrl(n, link.url, link.label, link.isImage)
+      const def = linkDefinition(text)
+      if (def && referenced.has(def.label)) handleUrl(n, def.url, def.label, false)
     }
 
     function checkLink(n, url, isImage) {
@@ -1023,7 +1026,6 @@ export function checkWiki(options) {
     }
 
     // llms-full.txt inlines every page; its deployed copy uses site routes.
-    const LLMS_LINK = /!?\[(?:[^[\]]|\[[^[\]]*\])*\]\(\s*<?((?:[^()\s<>]|\([^()\s]*\))+)>?(?:\s+"[^"]*")?\s*\)/g
     for (const label of ['llms-full.txt', 'public/llms-full.txt']) {
       const file = path.join(wikiDir, label)
       if (!fs.existsSync(file)) continue
@@ -1035,9 +1037,13 @@ export function checkWiki(options) {
         const shown = `${absent.slice(0, 5).join(', ')}${absent.length > 5 ? ', …' : ''}`
         error(label, 0, 'llms', `${absent.length} page(s) have no <doc> block (${shown}); run \`node wiki/scripts/gen-llms.mjs wiki\``)
       }
-      for (const { n, text: line } of scanPage(text).prose) {
-        for (const m of line.matchAll(LLMS_LINK)) {
-          const url = m[1]
+      // Same links gen-llms rewrites: inline ones, and "[ref]: target" definitions something refers to.
+      const fullProse = scanPage(text).prose
+      const fullRefs = new Set(fullProse.flatMap(({ text: line }) => linkReferences(line)))
+      for (const { n, text: line } of fullProse) {
+        const def = linkDefinition(line)
+        const defUrls = def && fullRefs.has(def.label) ? [def.url] : []
+        for (const url of [...inlineLinks(line).map((l) => l.url), ...defUrls]) {
           if (label.startsWith('public/')) {
             const problem = routeProblem(url)
             if (problem) error(label, n, 'llms', `${url} ${problem}`)

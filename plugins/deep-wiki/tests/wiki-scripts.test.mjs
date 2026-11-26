@@ -864,8 +864,12 @@ test('a pipe inside inline code in a table row is an error: GFM splits the cell 
   const generic = run(fixture(t, usage(table('`Array<Item> | null`'))))
   assert.deepEqual(rules(generic).sort(), ['bare-tag', 'table'])
   assert.match(messages(generic), /has a \| inside inline code in a table row.*escape it as \\\|/)
-  const helm = run(fixture(t, usage(table('`{{ .Values.x | quote }}`'))), { site: true })
-  assert.deepEqual(rules(helm).sort(), ['interpolation', 'table'])
+  const helm = fixture(t, usage(table('`{{ .Values.x | quote }}`')))
+  assert.deepEqual(rules(run(helm)).sort(), ['interpolation', 'table'])
+  // --site keeps what breaks the build (the exposed `{{ }}`) and drops the table rule itself.
+  assert.deepEqual(rules(run(helm, { site: true })), ['interpolation'])
+  assert.deepEqual(run(fixture(t, usage(table('`string | null`'))), { site: true }).errors, [])
+  assert.deepEqual(rules(run(fixture(t, usage(table('`string | null`'))))), ['table'])
   // Escaped, the code span holds together and protects its content.
   assert.deepEqual(run(fixture(t, usage(table('`Array<Item> \\| null`')))).errors, [])
   // A pipe in code outside a table is ordinary code.
@@ -1020,4 +1024,30 @@ test('one resolver finds the repository root: flag, recorded path, git, or none'
   // The recorded root is used when --repo is not given.
   fs.writeFileSync(path.join(f.wiki, '.deep-wiki.json'), JSON.stringify({ wikiDir: 'wiki' }))
   assert.deepEqual(checkWiki({ wikiDir: f.wiki }).notes, [])
+})
+
+test('a line that only looks like a link definition is prose', (t) => {
+  const prose = ['[Note]: this is important for readers.', '', '[INFO]: Server started', '', '[^1]: A footnote about ./nope.md.', '', '- [x] done', '', 'See arr[0] and [bracketed] text (paren).'].join('\n')
+  assert.deepEqual(run(fixture(t, usage(prose))).errors, [])
+  assert.deepEqual(run(fixture(t, usage(prose)), { site: true }).errors, [])
+})
+
+test('reference definitions are checked when used, with any title form', (t) => {
+  // Used: full, collapsed, and shortcut references; titles in double quotes, single quotes, and parentheses.
+  const used = [
+    'See [Setup][s], [Home][], and [usage].',
+    '',
+    "[s]: ./nope.md 'Setup'",
+    '[home]: ./gone.md (Home)',
+    '[usage]: <./missing.md> "Usage"',
+    '[unused]: ./never.md',
+  ].join('\n')
+  const result = run(fixture(t, usage(used)))
+  assert.deepEqual(rules(result), ['link', 'link', 'link'])
+  assert.match(messages(result), /nope\.md/)
+  assert.match(messages(result), /gone\.md/)
+  assert.match(messages(result), /missing\.md/)
+  assert.doesNotMatch(messages(result), /never\.md/)
+  const ok = ['See [Setup][s] and [the same page](./setup.md \'Setup\') or [again](./setup.md (Setup)).', '', '[s]: ./setup.md "Setup"'].join('\n')
+  assert.deepEqual(run(fixture(t, usage(ok))).errors, [])
 })
