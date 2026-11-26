@@ -61,7 +61,7 @@ const CONFIG_CONSTS = { title: 'SITE_TITLE', description: 'SITE_DESCRIPTION', ba
 // The title and description of a kept config are the user's.
 const PATCHABLE = ['base', 'repoUrl', 'branch']
 // Recorded in the state file. Kept in step with the plugin version by the plugin's tests.
-export const PLUGIN_VERSION = '2.2.0'
+export const PLUGIN_VERSION = '2.2.1'
 
 export class UsageError extends Error {}
 
